@@ -245,10 +245,10 @@ abstract contract Spade {
     }
 
     ///////////////////////////////////////////////////////////////////////////////
-    ///                                 MINT LOGIC                              ///
+    ///                           RESTRICTED MINT LOGIC                         ///
     ///////////////////////////////////////////////////////////////////////////////
 
-    /// @notice Enables Minting During the Minting Phase
+    /// @notice Enables Minting During the Restricted Minting Phase
     function mint() external payable {
         // Verify during mint phase
         if (block.timestamp < mintStart) revert WrongPhase();
@@ -329,18 +329,46 @@ abstract contract Spade {
         // Prevent withdrawals unless reveals is empty and commits isn't
         if (reveals[msg.sender] != 0 || commits[msg.sender] == 0) revert InvalidAction();
     
-        // Then we can release deposit
+        // Then we can release deposit with a penalty
+        // TODO: Add a penalty
         delete commits[msg.sender];
         if(depositToken == address(0)) msg.sender.call{value: depositAmount}("");
         else IERC20(depositToken).transfer(msg.sender, depositAmount);
     }
 
     /// @notice Allows a user to view if they can mint
-    function canMint() external view returns (bool mintable) {
+    function canRestrictedMint() external view returns (bool mintable) {
       // Sload the user's appraisal value
       uint256 senderAppraisal = reveals[msg.sender];
       uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
       mintable = senderAppraisal >= (resultPrice - flex * stdDev) && senderAppraisal <= (resultPrice + flex * stdDev);
+    }
+
+
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                              PUBLIC LBP LOGIC                           ///
+    ///////////////////////////////////////////////////////////////////////////////
+
+    /// @notice Permissionless minting for non-commitment phase participants
+    function mint(uint256 amount) external payable {
+        if (block.timestamp < publicMintStart) revert WrongPhase();
+        if (totalSupply >= maxTokenSupply) revert SoldOut();
+
+        // Calculate the mint price
+        uint256 mintPrice = publicMintPrice - ((block.timestamp - time) * priceDecayPerBlock);
+        if (mintPrice < minPrice) mintPrice = minPrice;
+
+        // Take Payment
+        if (depositToken == address(0) && msg.value < mintPrice) revert InsufficientValue();
+        else IERC20(depositToken).transferFrom(msg.sender, address(this), amountTransfer);
+
+        // Mint and Update
+        _safeMint(msg.sender, totalSupply);
+        unchecked {
+          totalSupply += 1;
+        }
+        publicMintPrice = mintPrice + priceIncreasePerMint;
+        time = block.timestamp;
     }
 
     ///////////////////////////////////////////////////////////////////////////////

@@ -28,12 +28,19 @@
 ???????????????????????????????????????*#######################################
 ```
 
-## These are the docs
-
-![spade](./assets/spades.jpeg)
-
 
 ## Overview
+
+
+The initial lbp price for the restricted mint period is calculated as the mean of the revealed commitments.
+
+Where a participant's discount to the public mint price during the restricted mint is inversly proportional to how close their appraisal was to the mean. 
+
+
+
+
+
+
 
 Mints suck...
 
@@ -70,6 +77,10 @@ If a user ends up in the range and forgos, they suffer a loss penalty proportion
 Additionally, if a bid is an outlier, a loss penalty is incurred proportional to a Z-Score.
 
 NOTE: If a commitooor forgets to reveal their sealed bid, they can call `lostReveal()` to withdraw their deposit.
+
+## Extremely Technical Docs
+
+![spade](./assets/spades.jpeg)
 
 
 
