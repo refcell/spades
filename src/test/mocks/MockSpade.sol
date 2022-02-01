@@ -14,7 +14,8 @@ contract MockSpade is Spade {
       uint256 _minPrice,
       uint256 _commitStart,
       uint256 _revealStart,
-      uint256 _mintStart,
+      uint256 _reservedMintStart,
+      uint256 _publicMintStart,
       address _depositToken,
       uint256 _flex
     ) Spade(
@@ -24,7 +25,8 @@ contract MockSpade is Spade {
       _minPrice,
       _commitStart,
       _revealStart,
-      _mintStart,
+      _reservedMintStart,
+      _publicMintStart,
       _depositToken,
       _flex
     ) {}

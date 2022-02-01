@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity >=0.8.0;
 
-import {Spade, ERC721TokenReceiver} from "../../Spade.sol";
+import {Spade} from "../../Spade.sol";
+import {ERC721TokenReceiver} from "../../interfaces/ERC721TokenReceiver.sol";
 
 contract ERC721User is ERC721TokenReceiver {
     Spade spade;

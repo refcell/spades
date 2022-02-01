@@ -33,9 +33,9 @@ import {FixedPointMathLib} from "@solmate/utils/FixedPointMathLib.sol";
 /// @author andreas <andreas@nascent.xyz>
 /// @dev Extensible ERC721 Implementation with a baked-in commitment scheme and lbp.
 abstract contract Spade {
-    ////////////////////////////////////////////////////
-    ///                 CUSTOM ERRORS                ///
-    ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                               CUSTOM ERRORS                             ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     error NotAuthorized();
 
@@ -61,9 +61,9 @@ abstract contract Spade {
 
     error InvalidAction();
 
-    ////////////////////////////////////////////////////
-    ///                    EVENTS                    ///
-    ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                                   EVENTS                                ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     event Commit(address indexed from);
 
@@ -75,9 +75,9 @@ abstract contract Spade {
 
     event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
 
-    ////////////////////////////////////////////////////
-    ///                   METADATA                   ///
-    ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                                  METADATA                               ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     string public name;
 
@@ -85,9 +85,9 @@ abstract contract Spade {
 
     function tokenURI(uint256 id) public view virtual returns (string memory);
 
-    ////////////////////////////////////////////////////
-    ///                  IMMUTABLES                  ///
-    ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                                  IMMUTABLES                             ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     /// @dev The deposit amount to place a commitment
     uint256 public immutable depositAmount;
@@ -101,18 +101,24 @@ abstract contract Spade {
     /// @dev Reveal Start Timestamp
     uint256 public immutable revealStart;
 
-    /// @dev Mint Start Timestamp
-    uint256 public immutable mintStart;
+    /// @dev Restricted Mint Start Timestamp
+    uint256 public immutable restrictedMintStart;
+
+    /// @dev Public Mint Start Timestamp
+    uint256 public immutable publicMintStart;
 
     /// @dev Optional ERC20 Deposit Token
-    address public depositToken;
+    address public immutable depositToken;
 
     /// @dev Flex is a scaling factor for standard deviation in price band calculation
-    uint256 public flex;
+    uint256 public immutable flex;
 
-    ////////////////////////////////////////////////////
-    ///               CUSTOM STORAGE                 ///
-    ////////////////////////////////////////////////////
+    /// @dev The maximum token supply
+    uint256 public immutable maxTokenSupply;
+
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                                CUSTOM STORAGE                           ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     /// @dev The outlier scale for loss penalty
     /// @dev Loss penalty is taken with OUTLIER_FLEX * error as a percent
@@ -125,8 +131,8 @@ abstract contract Spade {
     /// @dev The number of commits calculated
     uint256 public count;
 
-    /// @dev The result cumulative sum
-    uint256 public resultPrice;
+    /// @dev The result lbp start price
+    uint256 public startPrice;
 
     /// @dev The total token supply
     uint256 public totalSupply;
@@ -137,9 +143,9 @@ abstract contract Spade {
     /// @dev The resulting user appraisals
     mapping(address => uint256) public reveals;
 
-    ////////////////////////////////////////////////////
-    ///                ERC721 STORAGE                ///
-    ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                                ERC721 STORAGE                           ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     mapping(address => uint256) public balanceOf;
 
@@ -149,9 +155,9 @@ abstract contract Spade {
 
     mapping(address => mapping(address => bool)) public isApprovedForAll;
 
-    ////////////////////////////////////////////////////
-    ///                 CONSTRUCTOR                  ///
-    ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                                 CONSTRUCTOR                             ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     constructor(
       string memory _name,
@@ -160,7 +166,8 @@ abstract contract Spade {
       uint256 _minPrice,
       uint256 _commitStart,
       uint256 _revealStart,
-      uint256 _mintStart,
+      uint256 _reservedMintStart,
+      uint256 _publicMintStart,
       address _depositToken,
       uint256 _flex
     ) {
@@ -172,14 +179,15 @@ abstract contract Spade {
         minPrice = _minPrice;
         commitStart = _commitStart;
         revealStart = _revealStart;
-        mintStart = _mintStart;
+        reservedMintStart = _reservedMintStart;
+        publicMintStart = _publicMintStart;
         depositToken = _depositToken;
         flex = _flex;
     }
 
-    ////////////////////////////////////////////////////
-    ///              COMMIT-REVEAL LOGIC             ///
-    ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                              COMMITMENT LOGIC                           ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     /// @notice Commit is payable to require the deposit amount
     function commit(bytes32 commitment) external payable {
@@ -236,9 +244,9 @@ abstract contract Spade {
         emit Reveal(msg.sender, appraisal);
     }
 
-    ////////////////////////////////////////////////////
-    ///                  MINT LOGIC                  ///
-    ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                                 MINT LOGIC                              ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     /// @notice Enables Minting During the Minting Phase
     function mint() external payable {
@@ -335,9 +343,9 @@ abstract contract Spade {
       mintable = senderAppraisal >= (resultPrice - flex * stdDev) && senderAppraisal <= (resultPrice + flex * stdDev);
     }
 
-    ////////////////////////////////////////////////////
-    ///                 ERC721 LOGIC                 ///
-    ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                                ERC721 LOGIC                             ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     function approve(address spender, uint256 id) public virtual {
         address owner = ownerOf[id];
@@ -416,9 +424,9 @@ abstract contract Spade {
         }
     }
 
-    ////////////////////////////////////////////////////
-    ///                 ERC165 LOGIC                 ///
-    ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                                ERC165 LOGIC                             ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     function supportsInterface(bytes4 interfaceId) public pure virtual returns (bool) {
         return
@@ -427,9 +435,9 @@ abstract contract Spade {
             interfaceId == 0x5b5e139f; // ERC165 Interface ID for ERC721Metadata
     }
 
-    ////////////////////////////////////////////////////
-    ///                INTERNAL LOGIC                ///
-    ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                               INTERNAL LOGIC                            ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     function _mint(address to, uint256 id) internal virtual {
         if (to == address(0)) revert InvalidRecipient();
@@ -463,9 +471,9 @@ abstract contract Spade {
         emit Transfer(owner, address(0), id);
     }
 
-    ////////////////////////////////////////////////////
-    ///             INTERNAL SAFE LOGIC              ///
-    ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                            INTERNAL SAFE LOGIC                          ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     function _safeMint(address to, uint256 id) internal virtual {
         _mint(to, id);
@@ -494,15 +502,4 @@ abstract contract Spade {
           revert UnsafeRecipient();
         }
     }
-}
-
-/// @notice A generic interface for a contract which properly accepts ERC721 tokens.
-/// @author Solmate (https://github.com/Rari-Capital/solmate/blob/main/src/tokens/ERC721.sol)
-interface ERC721TokenReceiver {
-    function onERC721Received(
-        address operator,
-        address from,
-        uint256 id,
-        bytes calldata data
-    ) external returns (bytes4);
 }
