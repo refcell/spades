@@ -3,7 +3,7 @@ pragma solidity >=0.8.0;
 
 import {DSTestPlus} from "./utils/DSTestPlus.sol";
 
-import {MockCloak} from "./mocks/MockCloak.sol";
+import {MockSpade} from "./mocks/MockSpade.sol";
 
 import {MockERC20} from "@solmate/test/utils/mocks/MockERC20.sol";
 

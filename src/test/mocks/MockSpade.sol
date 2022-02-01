@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity >=0.8.0;
 
-import {Cloak} from "../../Cloak.sol";
+import {Spade} from "../../Spade.sol";
 
-/// @notice Mock Cloak
+/// @notice Mock Spade
 /// @dev Only implement the tokenURI :)
 /// @author andreas <andreas@nascent.xyz>
-contract MockCloak is Cloak {
+contract MockSpade is Spade {
     constructor(
       string memory _name,
       string memory _symbol,
@@ -17,7 +17,7 @@ contract MockCloak is Cloak {
       uint256 _mintStart,
       address _depositToken,
       uint256 _flex
-    ) Cloak(
+    ) Spade(
       _name,
       _symbol,
       _depositAmount,

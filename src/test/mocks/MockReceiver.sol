@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity >=0.8.0;
 
-import {Cloak, ERC721TokenReceiver} from "../../Cloak.sol";
+import {Spade, ERC721TokenReceiver} from "../../Spade.sol";
 
 contract ERC721User is ERC721TokenReceiver {
-    Cloak cloak;
+    Spade spade;
 
-    constructor(Cloak _cloak) {
-        cloak = _cloak;
+    constructor(Spade _spade) {
+        spade = _spade;
     }
 
     function onERC721Received(
@@ -20,11 +20,11 @@ contract ERC721User is ERC721TokenReceiver {
     }
 
     function approve(address spender, uint256 tokenId) public virtual {
-        cloak.approve(spender, tokenId);
+        spade.approve(spender, tokenId);
     }
 
     function setApprovalForAll(address operator, bool approved) public virtual {
-        cloak.setApprovalForAll(operator, approved);
+        spade.setApprovalForAll(operator, approved);
     }
 
     function transferFrom(
@@ -32,7 +32,7 @@ contract ERC721User is ERC721TokenReceiver {
         address to,
         uint256 tokenId
     ) public virtual {
-        cloak.transferFrom(from, to, tokenId);
+        spade.transferFrom(from, to, tokenId);
     }
 
     function safeTransferFrom(
@@ -40,7 +40,7 @@ contract ERC721User is ERC721TokenReceiver {
         address to,
         uint256 tokenId
     ) public virtual {
-        cloak.safeTransferFrom(from, to, tokenId);
+        spade.safeTransferFrom(from, to, tokenId);
     }
 
     function safeTransferFrom(
@@ -49,6 +49,6 @@ contract ERC721User is ERC721TokenReceiver {
         uint256 tokenId,
         bytes memory data
     ) public {
-        cloak.safeTransferFrom(from, to, tokenId, data);
+        spade.safeTransferFrom(from, to, tokenId, data);
     }
 }
