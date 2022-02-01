@@ -350,25 +350,35 @@ abstract contract Spade {
     ///////////////////////////////////////////////////////////////////////////////
 
     /// @notice Permissionless minting for non-commitment phase participants
+    /// @param amount The number of ERC721 tokens to mint
     function mint(uint256 amount) external payable {
         if (block.timestamp < publicMintStart) revert WrongPhase();
         if (totalSupply >= maxTokenSupply) revert SoldOut();
 
         // Calculate the mint price
-        uint256 mintPrice = publicMintPrice - ((block.timestamp - time) * priceDecayPerBlock);
+        uint256 mintPrice = startPrice - ((block.timestamp - time) * priceDecayPerBlock);
         if (mintPrice < minPrice) mintPrice = minPrice;
 
         // Take Payment
-        if (depositToken == address(0) && msg.value < mintPrice) revert InsufficientValue();
-        else IERC20(depositToken).transferFrom(msg.sender, address(this), amountTransfer);
+        if (depositToken == address(0) && msg.value < (mintPrice * amount)) revert InsufficientValue();
+        else IERC20(depositToken).transferFrom(msg.sender, address(this), mintPrice * amount);
 
         // Mint and Update
-        _safeMint(msg.sender, totalSupply);
-        unchecked {
-          totalSupply += 1;
+        for (uint256 i = 0; i < amount; i++) {
+          _safeMint(msg.sender, totalSupply + i);
         }
-        publicMintPrice = mintPrice + priceIncreasePerMint;
+        unchecked {
+          totalSupply += amount;
+        }
+        startPrice = mintPrice + priceIncreasePerMint * amount;
         time = block.timestamp;
+    }
+
+    /// @notice Allows a user to view if they can mint
+    /// @param amount The amount of tokens to mint
+    /// @return allowed If the sender is allowed to mint
+    function canMint(uint256 amount) external view returns (bool allowed) {
+      allowed = block.timestamp >= publicMintStart && totalSupply + amount < maxTokenSupply;
     }
 
     ///////////////////////////////////////////////////////////////////////////////
@@ -460,7 +470,7 @@ abstract contract Spade {
         return
             interfaceId == 0x01ffc9a7 || // ERC165 Interface ID for ERC165
             interfaceId == 0x80ac58cd || // ERC165 Interface ID for ERC721
-            interfaceId == 0x5b5e139f; // ERC165 Interface ID for ERC721Metadata
+            interfaceId == 0x5b5e139f;   // ERC165 Interface ID for ERC721Metadata
     }
 
     ///////////////////////////////////////////////////////////////////////////////
