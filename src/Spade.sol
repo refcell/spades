@@ -392,10 +392,20 @@ abstract contract Spade {
     function canRestrictedMint() external view returns (bool mintable) {
       // Sload the user's appraisal value
       uint256 senderAppraisal = reveals[msg.sender];
+      
+      // Get find the standard deviation
       uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
+
+      // Calculate Absolute Difference
       uint256 clearingPrice_ = clearingPrice;
-      // TODO::::
-      mintable = senderAppraisal >= (clearingPrice_ - FLEX * stdDev) && senderAppraisal <= (clearingPrice_ + FLEX * stdDev);
+      uint256 diff = senderAppraisal < clearingPrice_ ? clearingPrice_ - senderAppraisal : senderAppraisal - clearingPrice_;
+
+      // Outliers can't mint, everyone else can at varying discounts
+      uint256 zscore = 0;
+      if (stdDev != 0) {
+        zscore = diff / stdDev;
+      }
+      mintable = zscore > 3;
     }
 
     ///////////////////////////////////////////////////////////////////////////////

@@ -1,3 +1,3 @@
 testCommit() (gas: 53761)
-testConfig() (gas: 13902)
-testReveal(uint256) (runs: 256, μ: 115464, ~: 115466)
+testConfig() (gas: 13813)
+testReveal(uint256) (runs: 256, μ: 115421, ~: 115422)
