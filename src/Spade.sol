@@ -2,6 +2,8 @@
 pragma solidity >=0.8.0;
 
 import {IERC20} from "./interfaces/IERC20.sol";
+import {IERC721TokenReceiver} from "./interfaces/IERC721TokenReceiver.sol";
+
 import {FixedPointMathLib} from "@solmate/utils/FixedPointMathLib.sol";
 
 
@@ -60,6 +62,8 @@ abstract contract Spade {
     error InsufficientValue();
 
     error InvalidAction();
+
+    error SoldOut();
 
     ///////////////////////////////////////////////////////////////////////////////
     ///                                   EVENTS                                ///
@@ -123,6 +127,9 @@ abstract contract Spade {
     /// @dev The outlier scale for loss penalty
     /// @dev Loss penalty is taken with OUTLIER_FLEX * error as a percent
     uint256 public constant OUTLIER_FLEX = 5;
+
+    /// @dev The time stored for LBP implementation
+    uint256 private mintTime;
 
     /// @dev A rolling variance calculation
     /// @dev Used for minting price bands
@@ -227,15 +234,15 @@ abstract contract Spade {
         // Add the appraisal to the result value and recalculate variance
         // Calculation adapted from https://math.stackexchange.com/questions/102978/incremental-computation-of-standard-deviation
         if (count == 0) {
-          resultPrice = appraisal;
+          clearingPrice = appraisal;
         } else {
           // we have two or more values now so we calculate variance
           uint256 carryTerm = ((count - 1) * rollingVariance) / count;
-          uint256 diff = appraisal < resultPrice ? resultPrice - appraisal : appraisal - resultPrice;
+          uint256 diff = appraisal < clearingPrice ? clearingPrice - appraisal : appraisal - clearingPrice;
           uint256 updateTerm = (diff ** 2) / (count + 1);
           rollingVariance = carryTerm + updateTerm;
-          // Update resultPrice (new mean)
-          resultPrice = (count * resultPrice + appraisal) / (count + 1);
+          // Update clearingPrice (new mean)
+          clearingPrice = (count * clearingPrice + appraisal) / (count + 1);
         }
         count += 1;
 
@@ -256,8 +263,8 @@ abstract contract Spade {
         uint256 senderAppraisal = reveals[msg.sender];
 
         // Result value
-        uint256 finalValue = resultPrice;
-        if (resultPrice < minPrice) finalValue = minPrice;
+        uint256 finalValue = clearingPrice;
+        if (clearingPrice < minPrice) finalValue = minPrice;
 
         // Verify they sent at least enough to cover the mint cost
         if (depositToken == address(0) && msg.value < finalValue) revert InsufficientValue();
@@ -268,7 +275,7 @@ abstract contract Spade {
 
         // Check that the appraisal is within the price band
         uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
-        if (senderAppraisal < (resultPrice - flex * stdDev) || senderAppraisal > (resultPrice + flex * stdDev)) {
+        if (senderAppraisal < (clearingPrice - flex * stdDev) || senderAppraisal > (clearingPrice + flex * stdDev)) {
           revert InsufficientPrice();
         }
 
@@ -299,8 +306,8 @@ abstract contract Spade {
         // Calculate a Loss penalty
         uint256 lossPenalty = 0;
         uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
-        uint256 diff = senderAppraisal < resultPrice ? resultPrice - senderAppraisal : senderAppraisal - resultPrice;
-        if (stdDev != 0 && senderAppraisal >= (resultPrice - flex * stdDev) && senderAppraisal <= (resultPrice + flex * stdDev)) {
+        uint256 diff = senderAppraisal < clearingPrice ? clearingPrice - senderAppraisal : senderAppraisal - clearingPrice;
+        if (stdDev != 0 && senderAppraisal >= (clearingPrice - flex * stdDev) && senderAppraisal <= (clearingPrice + flex * stdDev)) {
           lossPenalty = ((diff / stdDev) * depositAmount) / 100;
         }
 
@@ -340,7 +347,7 @@ abstract contract Spade {
       // Sload the user's appraisal value
       uint256 senderAppraisal = reveals[msg.sender];
       uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
-      mintable = senderAppraisal >= (resultPrice - flex * stdDev) && senderAppraisal <= (resultPrice + flex * stdDev);
+      mintable = senderAppraisal >= (clearingPrice - flex * stdDev) && senderAppraisal <= (clearingPrice + flex * stdDev);
     }
 
 
@@ -355,7 +362,7 @@ abstract contract Spade {
         if (totalSupply >= maxTokenSupply) revert SoldOut();
 
         // Calculate the mint price
-        uint256 mintPrice = clearingPrice - ((block.timestamp - time) * priceDecayPerBlock);
+        uint256 mintPrice = clearingPrice - ((block.timestamp - mintTime) * priceDecayPerBlock);
         if (mintPrice < minPrice) mintPrice = minPrice;
 
         // Take Payment
@@ -370,7 +377,7 @@ abstract contract Spade {
           totalSupply += amount;
         }
         clearingPrice = mintPrice + priceIncreasePerMint * amount;
-        time = block.timestamp;
+        mintTime = block.timestamp;
     }
 
     /// @notice Allows a user to view if they can mint
@@ -437,8 +444,8 @@ abstract contract Spade {
 
         if (
           to.code.length != 0 ||
-          ERC721TokenReceiver(to).onERC721Received(msg.sender, from, id, "") !=
-          ERC721TokenReceiver.onERC721Received.selector
+          IERC721TokenReceiver(to).onERC721Received(msg.sender, from, id, "") !=
+          IERC721TokenReceiver.onERC721Received.selector
         ) {
           revert UnsafeRecipient();
         }
@@ -454,8 +461,8 @@ abstract contract Spade {
 
         if (
           to.code.length != 0 ||
-          ERC721TokenReceiver(to).onERC721Received(msg.sender, from, id, data) !=
-          ERC721TokenReceiver.onERC721Received.selector
+          IERC721TokenReceiver(to).onERC721Received(msg.sender, from, id, data) !=
+          IERC721TokenReceiver.onERC721Received.selector
         ) {
           revert UnsafeRecipient();
         }
@@ -517,8 +524,8 @@ abstract contract Spade {
 
         if (
           to.code.length != 0 ||
-          ERC721TokenReceiver(to).onERC721Received(msg.sender, address(0), id, "") !=
-          ERC721TokenReceiver.onERC721Received.selector
+          IERC721TokenReceiver(to).onERC721Received(msg.sender, address(0), id, "") !=
+          IERC721TokenReceiver.onERC721Received.selector
         ) {
           revert UnsafeRecipient();
         }
@@ -533,8 +540,8 @@ abstract contract Spade {
 
         if (
           to.code.length != 0 ||
-          ERC721TokenReceiver(to).onERC721Received(msg.sender, address(0), id, data) !=
-          ERC721TokenReceiver.onERC721Received.selector
+          IERC721TokenReceiver(to).onERC721Received(msg.sender, address(0), id, data) !=
+          IERC721TokenReceiver.onERC721Received.selector
         ) {
           revert UnsafeRecipient();
         }

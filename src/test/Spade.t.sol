@@ -19,6 +19,7 @@ contract SpadeTest is DSTestPlus {
     uint256 public commitStart = creationTime + 10;
     uint256 public revealStart = creationTime + 20;
     uint256 public restrictedMintStart = creationTime + 30;
+    uint256 public publicMintStart = creationTime + 40;
     address public depositToken = address(0);
     uint256 public flex = 1;
 
@@ -26,15 +27,16 @@ contract SpadeTest is DSTestPlus {
 
     function setUp() public {
         spade = new MockSpade(
-            name,               // string memory _name,
-            symbol,             // string memory _symbol,
-            depositAmount,      // uint256 _depositAmount,
-            minPrice,           // uint256 _minPrice,
-            commitStart,        // uint256 _commitStart,
-            revealStart,        // uint256 _revealStart,
-            mintStart,          // uint256 _mintStart,
-            depositToken,       // address _depositToken,
-            flex                // uint256 _flex
+            name,                   // string memory _name,
+            symbol,                 // string memory _symbol,
+            depositAmount,          // uint256 _depositAmount,
+            minPrice,               // uint256 _minPrice,
+            commitStart,            // uint256 _commitStart,
+            revealStart,            // uint256 _revealStart,
+            restrictedMintStart,    // uint256 _restrictedMintStart,
+            publicMintStart,        // uint256 _publicMintStart
+            depositToken,           // address _depositToken,
+            flex                    // uint256 _flex
         );
     }
 
@@ -46,7 +48,8 @@ contract SpadeTest is DSTestPlus {
         assert(spade.minPrice() == minPrice);
         assert(spade.commitStart() == commitStart);
         assert(spade.revealStart() == revealStart);
-        assert(spade.mintStart() == mintStart);
+        assert(spade.restrictedMintStart() == restrictedMintStart);
+        assert(spade.publicMintStart() == publicMintStart);
         assert(spade.depositToken() == depositToken);
         assert(spade.flex() == flex);
     }
