@@ -33,4 +33,4 @@ lint :; yarn && prettier --write src/**/*.sol && prettier --write src/*.sol
 snapshot :; forge clean && forge snapshot --optimize --optimize-runs 1000000
 
 ## Pre-commit hook
-precommit: lint snapshot
+precommit: snapshot

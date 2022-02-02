@@ -120,6 +120,12 @@ abstract contract Spade {
     /// @dev The maximum token supply
     uint256 public immutable maxTokenSupply;
 
+    /// @dev LBP priceDecayPerBlock config
+    uint256 public immutable priceDecayPerBlock;
+
+    /// @dev LBP priceIncreasePerMint config
+    uint256 public immutable priceIncreasePerMint;
+
     ///////////////////////////////////////////////////////////////////////////////
     ///                                CUSTOM STORAGE                           ///
     ///////////////////////////////////////////////////////////////////////////////
@@ -173,7 +179,7 @@ abstract contract Spade {
       uint256 _minPrice,
       uint256 _commitStart,
       uint256 _revealStart,
-      uint256 _reservedMintStart,
+      uint256 _restrictedMintStart,
       uint256 _publicMintStart,
       address _depositToken,
       uint256 _flex
@@ -186,7 +192,7 @@ abstract contract Spade {
         minPrice = _minPrice;
         commitStart = _commitStart;
         revealStart = _revealStart;
-        reservedMintStart = _reservedMintStart;
+        restrictedMintStart = _restrictedMintStart;
         publicMintStart = _publicMintStart;
         depositToken = _depositToken;
         flex = _flex;
@@ -219,7 +225,7 @@ abstract contract Spade {
     /// @notice Revealing a commitment
     function reveal(uint256 appraisal, bytes32 blindingFactor) external {
         // Verify during reveal+mint phase
-        if (block.timestamp < revealStart || block.timestamp >= mintStart) revert WrongPhase();
+        if (block.timestamp < revealStart || block.timestamp >= restrictedMintStart) revert WrongPhase();
 
         bytes32 senderCommit = commits[msg.sender];
 
@@ -257,7 +263,7 @@ abstract contract Spade {
     /// @notice Enables Minting During the Restricted Minting Phase
     function mint() external payable {
         // Verify during mint phase
-        if (block.timestamp < mintStart) revert WrongPhase();
+        if (block.timestamp < restrictedMintStart) revert WrongPhase();
 
         // Sload the user's appraisal value
         uint256 senderAppraisal = reveals[msg.sender];
@@ -295,7 +301,7 @@ abstract contract Spade {
     /// @notice A penalty is assumed if the user's sealed bid was within the minting threshold
     function forgo() external {
         // Verify during mint phase
-        if (block.timestamp < mintStart) revert WrongPhase();
+        if (block.timestamp < restrictedMintStart) revert WrongPhase();
 
         // Use Reveals as a mask
         if (reveals[msg.sender] == 0) revert InvalidAction(); 
@@ -330,7 +336,7 @@ abstract contract Spade {
     /// @notice Allows a user to withdraw their deposit on reveal elusion
     function lostReveal() external {
         // Verify after the reveal phase
-        if (block.timestamp < mintStart) revert WrongPhase();
+        if (block.timestamp < restrictedMintStart) revert WrongPhase();
 
         // Prevent withdrawals unless reveals is empty and commits isn't
         if (reveals[msg.sender] != 0 || commits[msg.sender] == 0) revert InvalidAction();

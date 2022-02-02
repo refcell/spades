@@ -100,7 +100,7 @@ contract SpadeTest is DSTestPlus {
         spade.reveal(uint256(10), blindingFactor);
 
         // Fail to reveal post-reveal phase
-        vm.warp(mintStart);
+        vm.warp(restrictedMintStart);
         vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
         spade.reveal(uint256(10), blindingFactor);
 
