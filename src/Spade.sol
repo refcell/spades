@@ -65,6 +65,8 @@ abstract contract Spade {
 
     error SoldOut();
 
+    error Outlier();
+
     ///////////////////////////////////////////////////////////////////////////////
     ///                                   EVENTS                                ///
     ///////////////////////////////////////////////////////////////////////////////
@@ -93,37 +95,41 @@ abstract contract Spade {
     ///                                  IMMUTABLES                             ///
     ///////////////////////////////////////////////////////////////////////////////
 
-    /// @dev The deposit amount to place a commitment
+    /// @notice The deposit amount to place a commitment
     uint256 public immutable depositAmount;
 
-    /// @dev The minimum mint price
+    /// @notice The minimum mint price
     uint256 public immutable minPrice;
 
-    /// @dev Commit Start Timestamp
+    /// @notice Commit Start Timestamp
     uint256 public immutable commitStart;
 
-    /// @dev Reveal Start Timestamp
+    /// @notice Reveal Start Timestamp
     uint256 public immutable revealStart;
 
-    /// @dev Restricted Mint Start Timestamp
+    /// @notice Restricted Mint Start Timestamp
     uint256 public immutable restrictedMintStart;
 
-    /// @dev Public Mint Start Timestamp
+    /// @notice Public Mint Start Timestamp
     uint256 public immutable publicMintStart;
 
-    /// @dev Optional ERC20 Deposit Token
+    /// @notice Optional ERC20 Deposit Token
     address public immutable depositToken;
 
-    /// @dev Flex is a scaling factor for standard deviation in price band calculation
+    /// @notice Flex is a scaling factor for standard deviation in price band calculation
     uint256 public constant FLEX = 1;
 
-    /// @dev The maximum token supply
+    /// @notice The maximum token supply
     uint256 public constant MAX_TOKEN_SUPPLY = 10_000;
 
-    /// @dev LBP priceDecayPerBlock config
+    /// @notice The maximum loss penalty
+    /// @dev Measured in bips
+    uint256 public constant MAX_LOSS_PENALTY = 5_000;
+
+    /// @notice LBP priceDecayPerBlock config
     uint256 public immutable priceDecayPerBlock;
 
-    /// @dev LBP priceIncreasePerMint config
+    /// @notice LBP priceIncreasePerMint config
     uint256 public immutable priceIncreasePerMint;
 
     ///////////////////////////////////////////////////////////////////////////////
@@ -277,26 +283,48 @@ abstract contract Spade {
         uint256 finalValue = clearingPrice;
         if (finalValue < minPrice) finalValue = minPrice;
 
-        // Verify they sent at least enough to cover the mint cost
-        if (depositToken == address(0) && msg.value < finalValue) revert InsufficientValue();
-        if (depositToken != address(0)) IERC20(depositToken).transferFrom(msg.sender, address(this), finalValue);
 
         // Use Reveals as a mask
-        if (reveals[msg.sender] == 0) revert InvalidAction(); 
+        if (reveals[msg.sender] == 0) revert InvalidAction();
 
-        // Check that the appraisal is within the price band
+        // Calculate Parameters
         uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
         uint256 clearingPrice_ = clearingPrice;
-        if (senderAppraisal < (clearingPrice_ - FLEX * stdDev) || senderAppraisal > (clearingPrice_ + FLEX * stdDev)) {
-          revert InsufficientPrice();
+        uint256 diff = senderAppraisal < clearingPrice_ ? clearingPrice_ - senderAppraisal : senderAppraisal - clearingPrice_;
+
+        // Prevent Outliers from Minting
+        uint256 zscore = 0;
+        if (stdDev != 0) {
+          zscore = diff / stdDev;
+        } else {
+          stdDev = 1;
         }
+        if (zscore > 3) {
+          revert Outlier();
+        }
+
+        // Calculate the discount to clearingPrice using an inverse relation to revealed price
+        // Max discount factor = 20% or 2_000 bips
+        // Prevent a zscore of 0
+        zscore += 1;
+        uint256 discountedPrice = clearingPrice_ - (clearingPrice_ * 2_000) / (10_000 * zscore);
+
+        // Verify they sent at least enough to cover the mint cost
+        if (depositToken == address(0) && msg.value < discountedPrice) revert InsufficientValue();
+        if (depositToken != address(0)) IERC20(depositToken).transferFrom(msg.sender, address(this), discountedPrice);
 
         // Delete revealed value to prevent double spend
         delete reveals[msg.sender];
 
+        // Deposit Penalty for underbidding
+        uint256 depositReturn = depositAmount;
+        if (senderAppraisal < clearingPrice_ && zscore >= 2) {
+          depositReturn = depositReturn - (depositReturn * diff) / (stdDev * 100);
+        }
+
         // Send deposit back to the minter
-        if(depositToken == address(0)) msg.sender.call{value: depositAmount}("");
-        else IERC20(depositToken).transfer(msg.sender, depositAmount);
+        if (depositToken == address(0)) msg.sender.call{value: depositReturn}("");
+        else IERC20(depositToken).transfer(msg.sender, depositReturn);
 
         // Otherwise, we can mint the token
         unchecked {
@@ -311,7 +339,7 @@ abstract contract Spade {
         if (block.timestamp < restrictedMintStart) revert WrongPhase();
 
         // Use Reveals as a mask
-        if (reveals[msg.sender] == 0) revert InvalidAction(); 
+        if (reveals[msg.sender] == 0) revert InvalidAction();
 
         // Sload the user's appraisal value
         uint256 senderAppraisal = reveals[msg.sender];
@@ -325,14 +353,17 @@ abstract contract Spade {
           lossPenalty = ((diff / stdDev) * depositAmount) / 100;
         }
 
-        // Increase loss penalty if it's an outlier using Z-scores
+        // Set to maximum loss penalty if outlier or too large of a loss
+        uint256 zscore = 0;
         if (stdDev != 0) {
-          // Take a penalty of OUTLIER_FLEX * error as a percent
-          lossPenalty += OUTLIER_FLEX * (diff / stdDev) * depositAmount / 100;
+          zscore = diff / stdDev;
+        }
+        uint256 maxPenalty = (depositAmount * MAX_LOSS_PENALTY) / 10_000;
+        if (zscore > 3 || lossPenalty > maxPenalty) {
+          lossPenalty = maxPenalty;
         }
 
-        // Return the deposit less the loss penalty
-        // NOTE: we can let this error on underflow since that means Cloak should keep the full deposit
+        // This won't underflow unless the MAX_LOSS_PENALY was misconfigured
         uint256 amountTransfer = depositAmount - lossPenalty;
 
         // Transfer eth or erc20 back to user
@@ -349,11 +380,10 @@ abstract contract Spade {
         // Prevent withdrawals unless reveals is empty and commits isn't
         if (reveals[msg.sender] != 0 || commits[msg.sender] == 0) revert InvalidAction();
     
-        // Then we can release deposit with a penalty
-        // NOTE: Hardcoded loss penalty
+        // Then we can release deposit with the maximum loss penalty
         delete commits[msg.sender];
         uint256 lossyDeposit = depositAmount;
-        lossyDeposit = lossyDeposit - ((lossyDeposit * 5_000) / 10_000);
+        lossyDeposit = lossyDeposit - ((lossyDeposit * MAX_LOSS_PENALTY) / 10_000);
         if(depositToken == address(0)) msg.sender.call{value: depositAmount}("");
         else IERC20(depositToken).transfer(msg.sender, depositAmount);
     }
@@ -364,6 +394,7 @@ abstract contract Spade {
       uint256 senderAppraisal = reveals[msg.sender];
       uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
       uint256 clearingPrice_ = clearingPrice;
+      // TODO::::
       mintable = senderAppraisal >= (clearingPrice_ - FLEX * stdDev) && senderAppraisal <= (clearingPrice_ + FLEX * stdDev);
     }
 
