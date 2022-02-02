@@ -245,12 +245,13 @@ abstract contract Spade {
           clearingPrice = appraisal;
         } else {
           // we have two or more values now so we calculate variance
+          uint256 clearingPrice_ = clearingPrice;
           uint256 carryTerm = ((count - 1) * rollingVariance) / count;
-          uint256 diff = appraisal < clearingPrice ? clearingPrice - appraisal : appraisal - clearingPrice;
+          uint256 diff = appraisal < clearingPrice_ ? clearingPrice_ - appraisal : appraisal - clearingPrice_;
           uint256 updateTerm = (diff ** 2) / (count + 1);
           rollingVariance = carryTerm + updateTerm;
-          // Update clearingPrice (new mean)
-          clearingPrice = (count * clearingPrice + appraisal) / (count + 1);
+          // Update clearingPrice_ (new mean)
+          clearingPrice_ = (count * clearingPrice_ + appraisal) / (count + 1);
         }
         count += 1;
 
@@ -272,7 +273,7 @@ abstract contract Spade {
 
         // Result value
         uint256 finalValue = clearingPrice;
-        if (clearingPrice < minPrice) finalValue = minPrice;
+        if (finalValue < minPrice) finalValue = minPrice;
 
         // Verify they sent at least enough to cover the mint cost
         if (depositToken == address(0) && msg.value < finalValue) revert InsufficientValue();
@@ -283,7 +284,8 @@ abstract contract Spade {
 
         // Check that the appraisal is within the price band
         uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
-        if (senderAppraisal < (clearingPrice - FLEX * stdDev) || senderAppraisal > (clearingPrice + FLEX * stdDev)) {
+        uint256 clearingPrice_ = clearingPrice;
+        if (senderAppraisal < (clearingPrice_ - FLEX * stdDev) || senderAppraisal > (clearingPrice_ + FLEX * stdDev)) {
           revert InsufficientPrice();
         }
 
@@ -312,10 +314,11 @@ abstract contract Spade {
         uint256 senderAppraisal = reveals[msg.sender];
 
         // Calculate a Loss penalty
+        uint256 clearingPrice_ = clearingPrice;
         uint256 lossPenalty = 0;
         uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
-        uint256 diff = senderAppraisal < clearingPrice ? clearingPrice - senderAppraisal : senderAppraisal - clearingPrice;
-        if (stdDev != 0 && senderAppraisal >= (clearingPrice - FLEX * stdDev) && senderAppraisal <= (clearingPrice + FLEX * stdDev)) {
+        uint256 diff = senderAppraisal < clearingPrice_ ? clearingPrice_ - senderAppraisal : senderAppraisal - clearingPrice_;
+        if (stdDev != 0 && senderAppraisal >= (clearingPrice_ - FLEX * stdDev) && senderAppraisal <= (clearingPrice_ + FLEX * stdDev)) {
           lossPenalty = ((diff / stdDev) * depositAmount) / 100;
         }
 
@@ -355,7 +358,8 @@ abstract contract Spade {
       // Sload the user's appraisal value
       uint256 senderAppraisal = reveals[msg.sender];
       uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
-      mintable = senderAppraisal >= (clearingPrice - FLEX * stdDev) && senderAppraisal <= (clearingPrice + FLEX * stdDev);
+      uint256 clearingPrice_ = clearingPrice;
+      mintable = senderAppraisal >= (clearingPrice_ - FLEX * stdDev) && senderAppraisal <= (clearingPrice_ + FLEX * stdDev);
     }
 
 
