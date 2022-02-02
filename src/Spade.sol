@@ -65,7 +65,7 @@ abstract contract Spade {
     ///                                   EVENTS                                ///
     ///////////////////////////////////////////////////////////////////////////////
 
-    event Commit(address indexed from);
+    event Commit(address indexed from, bytes32 commitment);
 
     event Reveal(address indexed from, uint256 appraisal);
 
@@ -132,7 +132,7 @@ abstract contract Spade {
     uint256 public count;
 
     /// @dev The result lbp start price
-    uint256 public startPrice;
+    uint256 public clearingPrice;
 
     /// @dev The total token supply
     uint256 public totalSupply;
@@ -202,12 +202,11 @@ abstract contract Spade {
           IERC20(depositToken).transferFrom(msg.sender, address(this), depositAmount);
         }
 
-        // Update a user's commitment if one's outstanding
-        // if (commits[msg.sender] != bytes32(0)) count += 1;
+        // Store Commitment
         commits[msg.sender] = commitment;
 
         // Emit the commit event
-        emit Commit(msg.sender);
+        emit Commit(msg.sender, commitment);
     }
 
     /// @notice Revealing a commitment
@@ -356,7 +355,7 @@ abstract contract Spade {
         if (totalSupply >= maxTokenSupply) revert SoldOut();
 
         // Calculate the mint price
-        uint256 mintPrice = startPrice - ((block.timestamp - time) * priceDecayPerBlock);
+        uint256 mintPrice = clearingPrice - ((block.timestamp - time) * priceDecayPerBlock);
         if (mintPrice < minPrice) mintPrice = minPrice;
 
         // Take Payment
@@ -370,7 +369,7 @@ abstract contract Spade {
         unchecked {
           totalSupply += amount;
         }
-        startPrice = mintPrice + priceIncreasePerMint * amount;
+        clearingPrice = mintPrice + priceIncreasePerMint * amount;
         time = block.timestamp;
     }
 

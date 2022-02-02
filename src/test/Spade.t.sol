@@ -18,7 +18,7 @@ contract SpadeTest is DSTestPlus {
     uint256 public creationTime = block.timestamp;
     uint256 public commitStart = creationTime + 10;
     uint256 public revealStart = creationTime + 20;
-    uint256 public mintStart = creationTime + 30;
+    uint256 public restrictedMintStart = creationTime + 30;
     address public depositToken = address(0);
     uint256 public flex = 1;
 
@@ -55,71 +55,71 @@ contract SpadeTest is DSTestPlus {
     ///                 COMMIT LOGIC                 ///
     ////////////////////////////////////////////////////
 
-    // /// @notice Test Commitments
-    // function testCommit() public {
-    //     bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
+    /// @notice Test Commitments
+    function testCommit() public {
+        bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
 
-    //     // Expect Revert when we don't send at least the depositAmount
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("InsufficientDeposit()"))));
-    //     cloak.commit(commitment);
+        // Expect Revert when we don't send at least the depositAmount
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("InsufficientDeposit()"))));
+        spade.commit(commitment);
 
-    //     // Expect Revert when we are not in the commit phase
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
-    //     cloak.commit{value: depositAmount}(commitment);
+        // Expect Revert when we are not in the commit phase
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
+        spade.commit{value: depositAmount}(commitment);
 
-    //     // Jump to after the commit phase
-    //     vm.warp(revealStart);
+        // Jump to after the commit phase
+        vm.warp(revealStart);
 
-    //     // Expect Revert when we are not in the commit phase
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
-    //     cloak.commit{value: depositAmount}(commitment);
+        // Expect Revert when we are not in the commit phase
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
+        spade.commit{value: depositAmount}(commitment);
 
-    //     // Jump to during the commit phase
-    //     vm.warp(commitStart);
+        // Jump to during the commit phase
+        vm.warp(commitStart);
 
-    //     // Successfully Commit
-    //     cloak.commit{value: depositAmount}(commitment);
-    // }
+        // Successfully Commit
+        spade.commit{value: depositAmount}(commitment);
+    }
 
     // ////////////////////////////////////////////////////
     // ///                 REVEAL LOGIC                 ///
     // ////////////////////////////////////////////////////
 
-    // /// @notice Test Reveals
-    // function testReveal(uint256 invalidConcealedBid) public {
-    //     // Create a Successful Commitment
-    //     bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
-    //     vm.warp(commitStart);
-    //     cloak.commit{value: depositAmount}(commitment);
+    /// @notice Test Reveals
+    function testReveal(uint256 invalidConcealedBid) public {
+        // Create a Successful Commitment
+        bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment);
 
-    //     // Fail to reveal pre-reveal phase
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
-    //     cloak.reveal(uint256(10), blindingFactor);
+        // Fail to reveal pre-reveal phase
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
+        spade.reveal(uint256(10), blindingFactor);
 
-    //     // Fail to reveal post-reveal phase
-    //     vm.warp(mintStart);
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
-    //     cloak.reveal(uint256(10), blindingFactor);
+        // Fail to reveal post-reveal phase
+        vm.warp(mintStart);
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
+        spade.reveal(uint256(10), blindingFactor);
 
-    //     // Warp to the reveal phase
-    //     vm.warp(revealStart);
+        // Warp to the reveal phase
+        vm.warp(revealStart);
 
-    //     // Fail to reveal with invalid value
-    //     uint256 concealed = invalidConcealedBid != 10 ? invalidConcealedBid : 11;
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidHash()"))));
-    //     cloak.reveal(uint256(concealed), blindingFactor);
+        // Fail to reveal with invalid value
+        uint256 concealed = invalidConcealedBid != 10 ? invalidConcealedBid : 11;
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidHash()"))));
+        spade.reveal(uint256(concealed), blindingFactor);
 
-    //     // Successfully Reveal During Reveal Phase
-    //     cloak.reveal(uint256(10), blindingFactor);
+        // Successfully Reveal During Reveal Phase
+        spade.reveal(uint256(10), blindingFactor);
 
-    //     // We shouldn't be able to double reveal
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidHash()"))));
-    //     cloak.reveal(uint256(10), blindingFactor);
+        // We shouldn't be able to double reveal
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidHash()"))));
+        spade.reveal(uint256(10), blindingFactor);
 
-    //     // Validate Price and Variance Calculations
-    //     assert(cloak.resultPrice() == uint256(10));
-    //     assert(cloak.count() == uint256(1));
-    // }
+        // Validate Price and Variance Calculations
+        assert(spade.clearingPrice() == uint256(10));
+        assert(spade.count() == uint256(1));
+    }
 
     // /// @notice Test Multiple Reveals
     // function testMultipleReveals() public {
