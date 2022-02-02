@@ -21,7 +21,8 @@ contract SpadeTest is DSTestPlus {
     uint256 public restrictedMintStart = creationTime + 30;
     uint256 public publicMintStart = creationTime + 40;
     address public depositToken = address(0);
-    uint256 public flex = 1;
+    uint256 public priceDecayPerBlock = 1;
+    uint256 public priceIncreasePerMint = 1;
 
     bytes32 public blindingFactor = bytes32(bytes("AllTheCoolKidsHateTheDiamondPattern"));
 
@@ -36,7 +37,8 @@ contract SpadeTest is DSTestPlus {
             restrictedMintStart,    // uint256 _restrictedMintStart,
             publicMintStart,        // uint256 _publicMintStart
             depositToken,           // address _depositToken,
-            flex                    // uint256 _flex
+            priceDecayPerBlock,     // uint256 _priceDecayPerBlock
+            priceIncreasePerMint    // uint256 _priceIncreasePerMint
         );
     }
 
@@ -51,7 +53,7 @@ contract SpadeTest is DSTestPlus {
         assert(spade.restrictedMintStart() == restrictedMintStart);
         assert(spade.publicMintStart() == publicMintStart);
         assert(spade.depositToken() == depositToken);
-        assert(spade.flex() == flex);
+        assert(spade.FLEX() == 1);
     }
 
     ////////////////////////////////////////////////////

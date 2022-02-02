@@ -115,10 +115,10 @@ abstract contract Spade {
     address public immutable depositToken;
 
     /// @dev Flex is a scaling factor for standard deviation in price band calculation
-    uint256 public immutable flex;
+    uint256 public constant FLEX = 1;
 
     /// @dev The maximum token supply
-    uint256 public immutable maxTokenSupply;
+    uint256 public constant MAX_TOKEN_SUPPLY = 10_000;
 
     /// @dev LBP priceDecayPerBlock config
     uint256 public immutable priceDecayPerBlock;
@@ -182,7 +182,8 @@ abstract contract Spade {
       uint256 _restrictedMintStart,
       uint256 _publicMintStart,
       address _depositToken,
-      uint256 _flex
+      uint256 _priceDecayPerBlock,
+      uint256 _priceIncreasePerMint
     ) {
         name = _name;
         symbol = _symbol;
@@ -195,7 +196,8 @@ abstract contract Spade {
         restrictedMintStart = _restrictedMintStart;
         publicMintStart = _publicMintStart;
         depositToken = _depositToken;
-        flex = _flex;
+        priceDecayPerBlock = _priceDecayPerBlock;
+        priceIncreasePerMint = _priceIncreasePerMint;
     }
 
     ///////////////////////////////////////////////////////////////////////////////
@@ -281,7 +283,7 @@ abstract contract Spade {
 
         // Check that the appraisal is within the price band
         uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
-        if (senderAppraisal < (clearingPrice - flex * stdDev) || senderAppraisal > (clearingPrice + flex * stdDev)) {
+        if (senderAppraisal < (clearingPrice - FLEX * stdDev) || senderAppraisal > (clearingPrice + FLEX * stdDev)) {
           revert InsufficientPrice();
         }
 
@@ -313,7 +315,7 @@ abstract contract Spade {
         uint256 lossPenalty = 0;
         uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
         uint256 diff = senderAppraisal < clearingPrice ? clearingPrice - senderAppraisal : senderAppraisal - clearingPrice;
-        if (stdDev != 0 && senderAppraisal >= (clearingPrice - flex * stdDev) && senderAppraisal <= (clearingPrice + flex * stdDev)) {
+        if (stdDev != 0 && senderAppraisal >= (clearingPrice - FLEX * stdDev) && senderAppraisal <= (clearingPrice + FLEX * stdDev)) {
           lossPenalty = ((diff / stdDev) * depositAmount) / 100;
         }
 
@@ -353,7 +355,7 @@ abstract contract Spade {
       // Sload the user's appraisal value
       uint256 senderAppraisal = reveals[msg.sender];
       uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
-      mintable = senderAppraisal >= (clearingPrice - flex * stdDev) && senderAppraisal <= (clearingPrice + flex * stdDev);
+      mintable = senderAppraisal >= (clearingPrice - FLEX * stdDev) && senderAppraisal <= (clearingPrice + FLEX * stdDev);
     }
 
 
@@ -365,7 +367,7 @@ abstract contract Spade {
     /// @param amount The number of ERC721 tokens to mint
     function mint(uint256 amount) external payable {
         if (block.timestamp < publicMintStart) revert WrongPhase();
-        if (totalSupply >= maxTokenSupply) revert SoldOut();
+        if (totalSupply >= MAX_TOKEN_SUPPLY) revert SoldOut();
 
         // Calculate the mint price
         uint256 mintPrice = clearingPrice - ((block.timestamp - mintTime) * priceDecayPerBlock);
@@ -390,7 +392,7 @@ abstract contract Spade {
     /// @param amount The amount of tokens to mint
     /// @return allowed If the sender is allowed to mint
     function canMint(uint256 amount) external view returns (bool allowed) {
-      allowed = block.timestamp >= publicMintStart && totalSupply + amount < maxTokenSupply;
+      allowed = block.timestamp >= publicMintStart && totalSupply + amount < MAX_TOKEN_SUPPLY;
     }
 
     ///////////////////////////////////////////////////////////////////////////////

@@ -17,7 +17,8 @@ contract MockSpade is Spade {
       uint256 _reservedMintStart,
       uint256 _publicMintStart,
       address _depositToken,
-      uint256 _flex
+      uint256 _priceDecayPerBlock,
+      uint256 _priceIncreasePerMint
     ) Spade(
       _name,
       _symbol,
@@ -28,7 +29,8 @@ contract MockSpade is Spade {
       _reservedMintStart,
       _publicMintStart,
       _depositToken,
-      _flex
+      _priceDecayPerBlock,
+      _priceIncreasePerMint
     ) {}
 
     function tokenURI(uint256) public pure virtual override returns (string memory) {}
