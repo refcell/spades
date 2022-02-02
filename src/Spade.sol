@@ -137,23 +137,23 @@ abstract contract Spade {
     /// @dev The time stored for LBP implementation
     uint256 private mintTime;
 
-    /// @dev A rolling variance calculation
+    /// @notice A rolling variance calculation
     /// @dev Used for minting price bands
     uint256 public rollingVariance;
 
-    /// @dev The number of commits calculated
+    /// @notice The number of commits calculated
     uint256 public count;
 
-    /// @dev The result lbp start price
+    /// @notice The result lbp start price
     uint256 public clearingPrice;
 
-    /// @dev The total token supply
+    /// @notice The total token supply
     uint256 public totalSupply;
 
-    /// @dev User Commitments
+    /// @notice User Commitments
     mapping(address => bytes32) public commits;
 
-    /// @dev The resulting user appraisals
+    /// @notice The resulting user appraisals
     mapping(address => uint256) public reveals;
 
     ///////////////////////////////////////////////////////////////////////////////
@@ -253,7 +253,9 @@ abstract contract Spade {
           // Update clearingPrice_ (new mean)
           clearingPrice_ = (count * clearingPrice_ + appraisal) / (count + 1);
         }
-        count += 1;
+        unchecked {
+          count += 1;
+        }
 
         // Emit a Reveal Event
         emit Reveal(msg.sender, appraisal);
@@ -264,7 +266,7 @@ abstract contract Spade {
     ///////////////////////////////////////////////////////////////////////////////
 
     /// @notice Enables Minting During the Restricted Minting Phase
-    function mint() external payable {
+    function restrictedMint() external payable {
         // Verify during mint phase
         if (block.timestamp < restrictedMintStart) revert WrongPhase();
 
@@ -297,8 +299,9 @@ abstract contract Spade {
         else IERC20(depositToken).transfer(msg.sender, depositAmount);
 
         // Otherwise, we can mint the token
-        _mint(msg.sender, totalSupply);
-        totalSupply += 1;
+        unchecked {
+          _mint(msg.sender, totalSupply++);
+        }
     }
 
     /// @notice Forgos a mint
@@ -309,7 +312,7 @@ abstract contract Spade {
 
         // Use Reveals as a mask
         if (reveals[msg.sender] == 0) revert InvalidAction(); 
-        
+
         // Sload the user's appraisal value
         uint256 senderAppraisal = reveals[msg.sender];
 
@@ -347,8 +350,10 @@ abstract contract Spade {
         if (reveals[msg.sender] != 0 || commits[msg.sender] == 0) revert InvalidAction();
     
         // Then we can release deposit with a penalty
-        // TODO: Add a penalty
+        // NOTE: Hardcoded loss penalty
         delete commits[msg.sender];
+        uint256 lossyDeposit = depositAmount;
+        lossyDeposit = lossyDeposit - ((lossyDeposit * 5_000) / 10_000);
         if(depositToken == address(0)) msg.sender.call{value: depositAmount}("");
         else IERC20(depositToken).transfer(msg.sender, depositAmount);
     }
@@ -362,7 +367,6 @@ abstract contract Spade {
       mintable = senderAppraisal >= (clearingPrice_ - FLEX * stdDev) && senderAppraisal <= (clearingPrice_ + FLEX * stdDev);
     }
 
-
     ///////////////////////////////////////////////////////////////////////////////
     ///                              PUBLIC LBP LOGIC                           ///
     ///////////////////////////////////////////////////////////////////////////////
@@ -374,7 +378,9 @@ abstract contract Spade {
         if (totalSupply >= MAX_TOKEN_SUPPLY) revert SoldOut();
 
         // Calculate the mint price
-        uint256 mintPrice = clearingPrice - ((block.timestamp - mintTime) * priceDecayPerBlock);
+        uint256 memMintTime = mintTime;
+        if (memMintTime == 0) memMintTime = block.timestamp;
+        uint256 mintPrice = clearingPrice - ((block.timestamp - memMintTime) * priceDecayPerBlock);
         if (mintPrice < minPrice) mintPrice = minPrice;
 
         // Take Payment
@@ -383,10 +389,9 @@ abstract contract Spade {
 
         // Mint and Update
         for (uint256 i = 0; i < amount; i++) {
-          _safeMint(msg.sender, totalSupply + i);
-        }
-        unchecked {
-          totalSupply += amount;
+          unchecked {
+            _safeMint(msg.sender, totalSupply++);
+          }
         }
         clearingPrice = mintPrice + priceIncreasePerMint * amount;
         mintTime = block.timestamp;
@@ -396,7 +401,7 @@ abstract contract Spade {
     /// @param amount The amount of tokens to mint
     /// @return allowed If the sender is allowed to mint
     function canMint(uint256 amount) external view returns (bool allowed) {
-      allowed = block.timestamp >= publicMintStart && totalSupply + amount < MAX_TOKEN_SUPPLY;
+      allowed = block.timestamp >= publicMintStart && (totalSupply + amount) < MAX_TOKEN_SUPPLY;
     }
 
     ///////////////////////////////////////////////////////////////////////////////
