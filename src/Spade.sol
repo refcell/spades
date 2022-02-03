@@ -149,7 +149,7 @@ abstract contract Spade {
     ///////////////////////////////////////////////////////////////////////////////
 
     /// @dev The time stored for LBP implementation
-    uint256 private mintTime;
+    uint256 public mintTime;
 
     /// @notice A rolling variance calculation
     /// @dev Used for minting price bands
@@ -463,21 +463,37 @@ abstract contract Spade {
         // Calculate the mint price
         uint256 memMintTime = mintTime;
         if (memMintTime == 0) memMintTime = block.timestamp;
-        uint256 mintPrice = clearingPrice - ((block.timestamp - memMintTime) * priceDecayPerBlock);
+        uint256 decay = ((block.timestamp - memMintTime) * priceDecayPerBlock);
+        uint256 mintPrice = 0;
+        if (decay <= clearingPrice) mintPrice = clearingPrice - decay;
         if (mintPrice < minPrice) mintPrice = minPrice;
 
         // Take Payment
         if (depositToken == address(0) && msg.value < (mintPrice * amount)) revert InsufficientValue();
-        else IERC20(depositToken).transferFrom(msg.sender, address(this), mintPrice * amount);
+        if (depositToken != address(0)) {
+          IERC20(depositToken).transferFrom(msg.sender, address(this), mintPrice * amount);
+        }
 
         // Mint and Update
         for (uint256 i = 0; i < amount; i++) {
-          unchecked {
-            _safeMint(msg.sender, totalSupply++);
-          }
+          _safeMint(msg.sender, totalSupply++);
+          // unchecked {
+          // }
         }
         clearingPrice = mintPrice + priceIncreasePerMint * amount;
         mintTime = block.timestamp;
+    }
+
+    /// @notice Returns the price to mint for the LBP
+    /// @param amount The number of tokens to mint
+    /// @return price to mint the tokens
+    function mintPrice(uint256 amount) external view returns (uint256 price) {
+      uint256 diff = 0;
+      if (mintTime != 0) diff = block.timestamp - mintTime;
+      uint256 decay = (diff * priceDecayPerBlock);
+      if (decay <= clearingPrice) price = clearingPrice - decay;
+      if (price < minPrice) price = minPrice;
+      price = price * amount;
     }
 
     /// @notice Allows a user to view if they can mint
@@ -494,7 +510,7 @@ abstract contract Spade {
     function approve(address spender, uint256 id) public virtual {
         address owner = ownerOf[id];
 
-        if (msg.sender != owner || !isApprovedForAll[owner][msg.sender]) {
+        if (msg.sender != owner && !isApprovedForAll[owner][msg.sender]) {
           revert NotAuthorized();
         }
 
@@ -518,7 +534,7 @@ abstract contract Spade {
 
         if (to == address(0)) revert InvalidRecipient();
 
-        if (msg.sender != from || msg.sender != getApproved[id] || !isApprovedForAll[from][msg.sender]) {
+        if (msg.sender != from && msg.sender != getApproved[id] && !isApprovedForAll[from][msg.sender]) {
           revert NotAuthorized();
         }
 
@@ -543,7 +559,7 @@ abstract contract Spade {
         transferFrom(from, to, id);
 
         if (
-          to.code.length != 0 ||
+          to.code.length != 0 &&
           IERC721TokenReceiver(to).onERC721Received(msg.sender, from, id, "") !=
           IERC721TokenReceiver.onERC721Received.selector
         ) {
@@ -560,7 +576,7 @@ abstract contract Spade {
         transferFrom(from, to, id);
 
         if (
-          to.code.length != 0 ||
+          to.code.length != 0 &&
           IERC721TokenReceiver(to).onERC721Received(msg.sender, from, id, data) !=
           IERC721TokenReceiver.onERC721Received.selector
         ) {
@@ -623,7 +639,7 @@ abstract contract Spade {
         _mint(to, id);
 
         if (
-          to.code.length != 0 ||
+          to.code.length != 0 &&
           IERC721TokenReceiver(to).onERC721Received(msg.sender, address(0), id, "") !=
           IERC721TokenReceiver.onERC721Received.selector
         ) {
@@ -639,7 +655,7 @@ abstract contract Spade {
         _mint(to, id);
 
         if (
-          to.code.length != 0 ||
+          to.code.length != 0 &&
           IERC721TokenReceiver(to).onERC721Received(msg.sender, address(0), id, data) !=
           IERC721TokenReceiver.onERC721Received.selector
         ) {

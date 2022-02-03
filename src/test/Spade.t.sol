@@ -3,7 +3,9 @@ pragma solidity >=0.8.0;
 
 import {MockSpade} from "./mocks/MockSpade.sol";
 import {DSTestPlus} from "./utils/DSTestPlus.sol";
+import {ERC721User} from "./mocks/MockReceiver.sol";
 
+import {stdError} from "@std/stdlib.sol";
 import {MockERC20} from "@solmate/test/utils/mocks/MockERC20.sol";
 import {FixedPointMathLib} from "@solmate/utils/FixedPointMathLib.sol";
 
@@ -24,6 +26,8 @@ contract SpadeTest is DSTestPlus {
     uint256 public priceDecayPerBlock = 1;
     uint256 public priceIncreasePerMint = 1;
 
+    ERC721User public receiver;
+
     bytes32 public blindingFactor = bytes32(bytes("AllTheCoolKidsHateTheDiamondPattern"));
 
     function setUp() public {
@@ -40,6 +44,8 @@ contract SpadeTest is DSTestPlus {
             priceDecayPerBlock,     // uint256 _priceDecayPerBlock
             priceIncreasePerMint    // uint256 _priceIncreasePerMint
         );
+
+        receiver = new ERC721User(spade);
     }
 
     /// @notice Tests metadata and immutable config
@@ -547,5 +553,94 @@ contract SpadeTest is DSTestPlus {
     ///                              PUBLIC LBP LOGIC                           ///
     ///////////////////////////////////////////////////////////////////////////////
 
+    /// @notice Test Public Minting
+    function testPublicMinting() public {
+        // Commit+Reveal 1
+        startHoax(address(69), address(69), depositAmount);
+        bytes32 commitment = keccak256(abi.encodePacked(address(69), uint256(10), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment);
+        vm.warp(revealStart);
+        spade.reveal(uint256(10), blindingFactor);
+        vm.stopPrank();
+
+        // Minting fails outside restricted minting phase
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
+        spade.mint(1);
+        assert(spade.canRestrictedMint() == false);
+
+        // Mint should fail in restricted phase
+        vm.warp(restrictedMintStart);
+        assert(spade.canRestrictedMint() == false);
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
+        spade.mint(1);
+
+        // Mint should fail in restricted phase
+        vm.warp(publicMintStart);
+        assert(spade.canRestrictedMint() == false);
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("InsufficientValue()"))));
+        spade.mint(1);
+
+        // We should be able to mint now
+        assert(spade.canMint(1) == true);
+
+        // Check parameters
+        assert(spade.clearingPrice() == 10);
+        assert(spade.rollingVariance() == 0);
+        assert(spade.mintTime() == 0);
+        assert(spade.priceDecayPerBlock() == priceDecayPerBlock);
+        assert(spade.priceIncreasePerMint() == priceIncreasePerMint);
+
+        // Get the public mint price
+        assert(spade.mintPrice(1) == 10);
+        assert(spade.mintPrice(10) == 100);
+
+        // We can't mint from this contract since it doesn't implement ERC721 Token Receiver
+        // vm.expectRevert(abi.encodePacked(bytes4(keccak256("UnsafeRecipient()"))));
+        // spade.mint{value: 10}(1);
+
+        // We can mint from a token receiver context
+        startHoax(address(receiver), address(receiver), type(uint256).max);
+        spade.mint{value: 10}(1);
+        assert(spade.balanceOf(address(receiver)) == 1);
+        assert(spade.totalSupply() == 1);
+
+        // The clearing price should be bumped up since it's an LBP
+        assert(spade.clearingPrice() == 11);
+        assert(spade.mintPrice(1) == 11);
+        
+        // Double mints are allowed in the public LBP phase
+        spade.mint{value: 11}(1);
+        assert(spade.balanceOf(address(receiver)) == 2);
+        assert(spade.totalSupply() == 2);
+        assert(spade.clearingPrice() == 12);
+        assert(spade.mintPrice(1) == 12);
+
+        // Jump one block ahead to realize price decrease
+        vm.warp(publicMintStart + 1);
+
+        // Price should decrease
+        assert(spade.mintPrice(1) == 11);
+        spade.mint{value: 11}(1);
+        assert(spade.balanceOf(address(receiver)) == 3);
+        assert(spade.totalSupply() == 3);
+        assert(spade.clearingPrice() == 12);
+        assert(spade.mintPrice(1) == 12);
+
+        // Warp way into the future
+        vm.warp(publicMintStart + 100);
+
+        // The price should now be the min price
+        assert(spade.mintPrice(1) == minPrice);
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("InsufficientValue()"))));
+        spade.mint{value: 9}(1);
+        spade.mint{value: 10}(1);
+        assert(spade.balanceOf(address(receiver)) == 4);
+        assert(spade.totalSupply() == 4);
+        assert(spade.clearingPrice() == 11);
+        assert(spade.mintPrice(1) == 11);
+
+        vm.stopPrank();
+    }
 
 }
