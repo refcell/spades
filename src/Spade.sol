@@ -2,6 +2,8 @@
 pragma solidity >=0.8.0;
 
 import {IERC20} from "./interfaces/IERC20.sol";
+import {IERC721TokenReceiver} from "./interfaces/IERC721TokenReceiver.sol";
+
 import {FixedPointMathLib} from "@solmate/utils/FixedPointMathLib.sol";
 
 
@@ -61,6 +63,10 @@ abstract contract Spade {
 
     error InvalidAction();
 
+    error SoldOut();
+
+    error Outlier();
+
     ///////////////////////////////////////////////////////////////////////////////
     ///                                   EVENTS                                ///
     ///////////////////////////////////////////////////////////////////////////////
@@ -89,58 +95,79 @@ abstract contract Spade {
     ///                                  IMMUTABLES                             ///
     ///////////////////////////////////////////////////////////////////////////////
 
-    /// @dev The deposit amount to place a commitment
+    /// @notice The deposit amount to place a commitment
     uint256 public immutable depositAmount;
 
-    /// @dev The minimum mint price
+    /// @notice The minimum mint price
     uint256 public immutable minPrice;
 
-    /// @dev Commit Start Timestamp
+    /// @notice Commit Start Timestamp
     uint256 public immutable commitStart;
 
-    /// @dev Reveal Start Timestamp
+    /// @notice Reveal Start Timestamp
     uint256 public immutable revealStart;
 
-    /// @dev Restricted Mint Start Timestamp
+    /// @notice Restricted Mint Start Timestamp
     uint256 public immutable restrictedMintStart;
 
-    /// @dev Public Mint Start Timestamp
+    /// @notice Public Mint Start Timestamp
     uint256 public immutable publicMintStart;
 
-    /// @dev Optional ERC20 Deposit Token
+    /// @notice Optional ERC20 Deposit Token
     address public immutable depositToken;
 
-    /// @dev Flex is a scaling factor for standard deviation in price band calculation
-    uint256 public immutable flex;
+    /// @notice LBP priceDecayPerBlock config
+    uint256 public immutable priceDecayPerBlock;
 
-    /// @dev The maximum token supply
-    uint256 public immutable maxTokenSupply;
+    /// @notice LBP priceIncreasePerMint config
+    uint256 public immutable priceIncreasePerMint;
+
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                                  CONSTANTS                              ///
+    ///////////////////////////////////////////////////////////////////////////////
+    
+    /// @dev The outlier scale for loss penalty
+    /// @dev Loss penalty is taken with OUTLIER_FLEX * error as a percent
+    uint256 public constant OUTLIER_FLEX = 5;
+
+    /// @notice Flex is a scaling factor for standard deviation in price band calculation
+    uint256 public constant FLEX = 1;
+
+    /// @notice The maximum token supply
+    uint256 public constant MAX_TOKEN_SUPPLY = 10_000;
+
+    /// @notice The maximum loss penalty
+    /// @dev Measured in bips
+    uint256 public constant MAX_LOSS_PENALTY = 5_000;
+
+    /// @notice The maximum discount factor
+    /// @dev Measured in bips
+    uint256 public constant MAX_DISCOUNT_FACTOR = 2_000;
 
     ///////////////////////////////////////////////////////////////////////////////
     ///                                CUSTOM STORAGE                           ///
     ///////////////////////////////////////////////////////////////////////////////
 
-    /// @dev The outlier scale for loss penalty
-    /// @dev Loss penalty is taken with OUTLIER_FLEX * error as a percent
-    uint256 public constant OUTLIER_FLEX = 5;
+    /// @dev The time stored for LBP implementation
+    uint256 public mintTime;
 
-    /// @dev A rolling variance calculation
+    /// @notice A rolling variance calculation
     /// @dev Used for minting price bands
     uint256 public rollingVariance;
 
-    /// @dev The number of commits calculated
+    /// @notice The number of commits calculated
     uint256 public count;
 
-    /// @dev The result lbp start price
+    /// @notice The result lbp start price
     uint256 public clearingPrice;
 
-    /// @dev The total token supply
+    /// @notice The total token supply
     uint256 public totalSupply;
 
-    /// @dev User Commitments
+    /// @notice User Commitments
     mapping(address => bytes32) public commits;
 
-    /// @dev The resulting user appraisals
+    /// @notice The resulting user appraisals
     mapping(address => uint256) public reveals;
 
     ///////////////////////////////////////////////////////////////////////////////
@@ -166,10 +193,11 @@ abstract contract Spade {
       uint256 _minPrice,
       uint256 _commitStart,
       uint256 _revealStart,
-      uint256 _reservedMintStart,
+      uint256 _restrictedMintStart,
       uint256 _publicMintStart,
       address _depositToken,
-      uint256 _flex
+      uint256 _priceDecayPerBlock,
+      uint256 _priceIncreasePerMint
     ) {
         name = _name;
         symbol = _symbol;
@@ -179,10 +207,11 @@ abstract contract Spade {
         minPrice = _minPrice;
         commitStart = _commitStart;
         revealStart = _revealStart;
-        reservedMintStart = _reservedMintStart;
+        restrictedMintStart = _restrictedMintStart;
         publicMintStart = _publicMintStart;
         depositToken = _depositToken;
-        flex = _flex;
+        priceDecayPerBlock = _priceDecayPerBlock;
+        priceIncreasePerMint = _priceIncreasePerMint;
     }
 
     ///////////////////////////////////////////////////////////////////////////////
@@ -212,7 +241,7 @@ abstract contract Spade {
     /// @notice Revealing a commitment
     function reveal(uint256 appraisal, bytes32 blindingFactor) external {
         // Verify during reveal+mint phase
-        if (block.timestamp < revealStart || block.timestamp >= mintStart) revert WrongPhase();
+        if (block.timestamp < revealStart || block.timestamp >= restrictedMintStart) revert WrongPhase();
 
         bytes32 senderCommit = commits[msg.sender];
 
@@ -227,17 +256,24 @@ abstract contract Spade {
         // Add the appraisal to the result value and recalculate variance
         // Calculation adapted from https://math.stackexchange.com/questions/102978/incremental-computation-of-standard-deviation
         if (count == 0) {
-          resultPrice = appraisal;
+          clearingPrice = appraisal;
         } else {
-          // we have two or more values now so we calculate variance
-          uint256 carryTerm = ((count - 1) * rollingVariance) / count;
-          uint256 diff = appraisal < resultPrice ? resultPrice - appraisal : appraisal - resultPrice;
-          uint256 updateTerm = (diff ** 2) / (count + 1);
-          rollingVariance = carryTerm + updateTerm;
-          // Update resultPrice (new mean)
-          resultPrice = (count * resultPrice + appraisal) / (count + 1);
+          uint256 clearingPrice_ = clearingPrice;
+          uint256 newClearingPrice = (count * clearingPrice_ + appraisal) / (count + 1);
+
+          uint256 carryTerm = count * rollingVariance;
+          uint256 clearingDiff = clearingPrice_ > newClearingPrice ?  clearingPrice_ - newClearingPrice : newClearingPrice - clearingPrice_;
+          uint256 deviationUpdate = count * (clearingDiff ** 2);
+          uint256 meanUpdate = appraisal < newClearingPrice ? newClearingPrice - appraisal : appraisal - newClearingPrice;
+          uint256 updateTerm = meanUpdate ** 2;
+          rollingVariance = (deviationUpdate + carryTerm + updateTerm) / (count + 1);
+
+          // Update clearingPrice_ (new mean)
+          clearingPrice = newClearingPrice;
         }
-        count += 1;
+        unchecked {
+          count += 1;
+        }
 
         // Emit a Reveal Event
         emit Reveal(msg.sender, appraisal);
@@ -247,72 +283,127 @@ abstract contract Spade {
     ///                           RESTRICTED MINT LOGIC                         ///
     ///////////////////////////////////////////////////////////////////////////////
 
+    /// @notice Returns the mint price the user can mint at
+    function restrictedMintPrice() external view returns(uint256 mintPrice) {
+        // Sload the user's appraisal value
+        uint256 senderAppraisal = reveals[msg.sender];
+
+        // Result value
+        uint256 finalValue = clearingPrice;
+        if (finalValue < minPrice) finalValue = minPrice;
+
+        // Calculate Parameters
+        uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
+        uint256 clearingPrice_ = clearingPrice;
+        uint256 diff = senderAppraisal < clearingPrice_ ? clearingPrice_ - senderAppraisal : senderAppraisal - clearingPrice_;
+
+        // Prevent Outliers from Minting
+        uint256 zscore = 0;
+        if (stdDev != 0) {
+          zscore = diff / stdDev;
+        }
+
+        // Calculate the discount to clearingPrice using an inverse relation to revealed price
+        // Max discount factor = 20% or 2_000 bips
+        // Prevent a zscore of 0
+        zscore += 1;
+        mintPrice = clearingPrice_ - (clearingPrice_ * MAX_DISCOUNT_FACTOR) / (10_000 * zscore);
+    }
+
     /// @notice Enables Minting During the Restricted Minting Phase
-    function mint() external payable {
+    function restrictedMint() external payable {
         // Verify during mint phase
-        if (block.timestamp < mintStart) revert WrongPhase();
+        if (block.timestamp < restrictedMintStart) revert WrongPhase();
+        if (totalSupply >= MAX_TOKEN_SUPPLY) revert SoldOut();
 
         // Sload the user's appraisal value
         uint256 senderAppraisal = reveals[msg.sender];
 
         // Result value
-        uint256 finalValue = resultPrice;
-        if (resultPrice < minPrice) finalValue = minPrice;
-
-        // Verify they sent at least enough to cover the mint cost
-        if (depositToken == address(0) && msg.value < finalValue) revert InsufficientValue();
-        if (depositToken != address(0)) IERC20(depositToken).transferFrom(msg.sender, address(this), finalValue);
+        uint256 finalValue = clearingPrice;
+        if (finalValue < minPrice) finalValue = minPrice;
 
         // Use Reveals as a mask
-        if (reveals[msg.sender] == 0) revert InvalidAction(); 
+        if (reveals[msg.sender] == 0) revert InvalidAction();
 
-        // Check that the appraisal is within the price band
+        // Calculate Parameters
         uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
-        if (senderAppraisal < (resultPrice - flex * stdDev) || senderAppraisal > (resultPrice + flex * stdDev)) {
-          revert InsufficientPrice();
+        uint256 clearingPrice_ = clearingPrice;
+        uint256 diff = senderAppraisal < clearingPrice_ ? clearingPrice_ - senderAppraisal : senderAppraisal - clearingPrice_;
+
+        // Prevent Outliers from Minting
+        uint256 zscore = 0;
+        if (stdDev != 0) {
+          zscore = diff / stdDev;
+        } else {
+          stdDev = 1;
         }
+        if (zscore > 3) {
+          revert Outlier();
+        }
+
+        // Calculate the discount to clearingPrice using an inverse relation to revealed price
+        // Max discount factor = 20% or 2_000 bips
+        // Prevent a zscore of 0
+        zscore += 1;
+        uint256 discountedPrice = clearingPrice_ - (clearingPrice_ * 2_000) / (10_000 * zscore);
+
+        // Verify they sent at least enough to cover the mint cost
+        if (depositToken == address(0) && msg.value < discountedPrice) revert InsufficientValue();
+        if (depositToken != address(0)) IERC20(depositToken).transferFrom(msg.sender, address(this), discountedPrice);
 
         // Delete revealed value to prevent double spend
         delete reveals[msg.sender];
 
+        // Deposit Penalty for underbidding
+        uint256 depositReturn = depositAmount;
+        if (senderAppraisal < clearingPrice_ && zscore >= 2) {
+          depositReturn = depositReturn - (depositReturn * diff) / (stdDev * 100);
+        }
+
         // Send deposit back to the minter
-        if(depositToken == address(0)) msg.sender.call{value: depositAmount}("");
-        else IERC20(depositToken).transfer(msg.sender, depositAmount);
+        if (depositToken == address(0)) msg.sender.call{value: depositReturn}("");
+        else IERC20(depositToken).transfer(msg.sender, depositReturn);
 
         // Otherwise, we can mint the token
-        _mint(msg.sender, totalSupply);
-        totalSupply += 1;
+        unchecked {
+          _mint(msg.sender, totalSupply++);
+        }
     }
 
     /// @notice Forgos a mint
     /// @notice A penalty is assumed if the user's sealed bid was within the minting threshold
     function forgo() external {
         // Verify during mint phase
-        if (block.timestamp < mintStart) revert WrongPhase();
+        if (block.timestamp < restrictedMintStart) revert WrongPhase();
 
         // Use Reveals as a mask
-        if (reveals[msg.sender] == 0) revert InvalidAction(); 
-        
+        if (reveals[msg.sender] == 0) revert InvalidAction();
+
         // Sload the user's appraisal value
         uint256 senderAppraisal = reveals[msg.sender];
 
+        // sload depositAmount
+        uint256 sloadDeposit = depositAmount;
+
         // Calculate a Loss penalty
+        uint256 clearingPrice_ = clearingPrice;
         uint256 lossPenalty = 0;
         uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
-        uint256 diff = senderAppraisal < resultPrice ? resultPrice - senderAppraisal : senderAppraisal - resultPrice;
-        if (stdDev != 0 && senderAppraisal >= (resultPrice - flex * stdDev) && senderAppraisal <= (resultPrice + flex * stdDev)) {
-          lossPenalty = ((diff / stdDev) * depositAmount) / 100;
-        }
-
-        // Increase loss penalty if it's an outlier using Z-scores
+        uint256 diff = senderAppraisal < clearingPrice_ ? clearingPrice_ - senderAppraisal : senderAppraisal - clearingPrice_;
+        uint256 zscore = 0;
         if (stdDev != 0) {
-          // Take a penalty of OUTLIER_FLEX * error as a percent
-          lossPenalty += OUTLIER_FLEX * (diff / stdDev) * depositAmount / 100;
+          zscore = diff / stdDev;
+          lossPenalty = (zscore * sloadDeposit) / 100;
+        }
+        uint256 maxPenalty = (sloadDeposit * MAX_LOSS_PENALTY) / 10_000;
+        // Use an outlier bounds of 2 - realistically it should be 3
+        if (zscore >= 2 || lossPenalty > maxPenalty) {
+          lossPenalty = maxPenalty;
         }
 
-        // Return the deposit less the loss penalty
-        // NOTE: we can let this error on underflow since that means Cloak should keep the full deposit
-        uint256 amountTransfer = depositAmount - lossPenalty;
+        // This won't underflow unless the MAX_LOSS_PENALY was misconfigured
+        uint256 amountTransfer = sloadDeposit - lossPenalty;
 
         // Transfer eth or erc20 back to user
         delete reveals[msg.sender];
@@ -323,26 +414,41 @@ abstract contract Spade {
     /// @notice Allows a user to withdraw their deposit on reveal elusion
     function lostReveal() external {
         // Verify after the reveal phase
-        if (block.timestamp < mintStart) revert WrongPhase();
+        if (block.timestamp < restrictedMintStart) revert WrongPhase();
 
         // Prevent withdrawals unless reveals is empty and commits isn't
         if (reveals[msg.sender] != 0 || commits[msg.sender] == 0) revert InvalidAction();
     
-        // Then we can release deposit with a penalty
-        // TODO: Add a penalty
+        // Then we can release deposit with the maximum loss penalty
         delete commits[msg.sender];
-        if(depositToken == address(0)) msg.sender.call{value: depositAmount}("");
-        else IERC20(depositToken).transfer(msg.sender, depositAmount);
+        uint256 lossyDeposit = depositAmount;
+        lossyDeposit = lossyDeposit - ((lossyDeposit * MAX_LOSS_PENALTY) / 10_000);
+        if(depositToken == address(0)) msg.sender.call{value: lossyDeposit}("");
+        else IERC20(depositToken).transfer(msg.sender, lossyDeposit);
     }
 
     /// @notice Allows a user to view if they can mint
     function canRestrictedMint() external view returns (bool mintable) {
       // Sload the user's appraisal value
       uint256 senderAppraisal = reveals[msg.sender];
+      
+      // Get find the standard deviation
       uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
-      mintable = senderAppraisal >= (resultPrice - flex * stdDev) && senderAppraisal <= (resultPrice + flex * stdDev);
-    }
 
+      // Calculate Absolute Difference
+      uint256 clearingPrice_ = clearingPrice;
+      uint256 diff = senderAppraisal < clearingPrice_ ? clearingPrice_ - senderAppraisal : senderAppraisal - clearingPrice_;
+
+      // Outliers can't mint, everyone else can at varying discounts
+      uint256 zscore = 0;
+      if (stdDev != 0) {
+        zscore = diff / stdDev;
+      }
+      mintable = block.timestamp >= restrictedMintStart
+                  && zscore < 3
+                  && ((totalSupply + 1) <= MAX_TOKEN_SUPPLY)
+                  && senderAppraisal != 0;
+    }
 
     ///////////////////////////////////////////////////////////////////////////////
     ///                              PUBLIC LBP LOGIC                           ///
@@ -352,32 +458,49 @@ abstract contract Spade {
     /// @param amount The number of ERC721 tokens to mint
     function mint(uint256 amount) external payable {
         if (block.timestamp < publicMintStart) revert WrongPhase();
-        if (totalSupply >= maxTokenSupply) revert SoldOut();
+        if (totalSupply >= MAX_TOKEN_SUPPLY) revert SoldOut();
 
         // Calculate the mint price
-        uint256 mintPrice = clearingPrice - ((block.timestamp - time) * priceDecayPerBlock);
+        uint256 memMintTime = mintTime;
+        if (memMintTime == 0) memMintTime = block.timestamp;
+        uint256 decay = ((block.timestamp - memMintTime) * priceDecayPerBlock);
+        uint256 mintPrice = 0;
+        if (decay <= clearingPrice) mintPrice = clearingPrice - decay;
         if (mintPrice < minPrice) mintPrice = minPrice;
 
         // Take Payment
         if (depositToken == address(0) && msg.value < (mintPrice * amount)) revert InsufficientValue();
-        else IERC20(depositToken).transferFrom(msg.sender, address(this), mintPrice * amount);
+        if (depositToken != address(0)) {
+          IERC20(depositToken).transferFrom(msg.sender, address(this), mintPrice * amount);
+        }
 
         // Mint and Update
         for (uint256 i = 0; i < amount; i++) {
-          _safeMint(msg.sender, totalSupply + i);
-        }
-        unchecked {
-          totalSupply += amount;
+          _safeMint(msg.sender, totalSupply++);
+          // unchecked {
+          // }
         }
         clearingPrice = mintPrice + priceIncreasePerMint * amount;
-        time = block.timestamp;
+        mintTime = block.timestamp;
+    }
+
+    /// @notice Returns the price to mint for the LBP
+    /// @param amount The number of tokens to mint
+    /// @return price to mint the tokens
+    function mintPrice(uint256 amount) external view returns (uint256 price) {
+      uint256 diff = 0;
+      if (mintTime != 0) diff = block.timestamp - mintTime;
+      uint256 decay = (diff * priceDecayPerBlock);
+      if (decay <= clearingPrice) price = clearingPrice - decay;
+      if (price < minPrice) price = minPrice;
+      price = price * amount;
     }
 
     /// @notice Allows a user to view if they can mint
     /// @param amount The amount of tokens to mint
     /// @return allowed If the sender is allowed to mint
     function canMint(uint256 amount) external view returns (bool allowed) {
-      allowed = block.timestamp >= publicMintStart && totalSupply + amount < maxTokenSupply;
+      allowed = block.timestamp >= publicMintStart && (totalSupply + amount) < MAX_TOKEN_SUPPLY;
     }
 
     ///////////////////////////////////////////////////////////////////////////////
@@ -387,7 +510,7 @@ abstract contract Spade {
     function approve(address spender, uint256 id) public virtual {
         address owner = ownerOf[id];
 
-        if (msg.sender != owner || !isApprovedForAll[owner][msg.sender]) {
+        if (msg.sender != owner && !isApprovedForAll[owner][msg.sender]) {
           revert NotAuthorized();
         }
 
@@ -411,7 +534,7 @@ abstract contract Spade {
 
         if (to == address(0)) revert InvalidRecipient();
 
-        if (msg.sender != from || msg.sender != getApproved[id] || !isApprovedForAll[from][msg.sender]) {
+        if (msg.sender != from && msg.sender != getApproved[id] && !isApprovedForAll[from][msg.sender]) {
           revert NotAuthorized();
         }
 
@@ -436,9 +559,9 @@ abstract contract Spade {
         transferFrom(from, to, id);
 
         if (
-          to.code.length != 0 ||
-          ERC721TokenReceiver(to).onERC721Received(msg.sender, from, id, "") !=
-          ERC721TokenReceiver.onERC721Received.selector
+          to.code.length != 0 &&
+          IERC721TokenReceiver(to).onERC721Received(msg.sender, from, id, "") !=
+          IERC721TokenReceiver.onERC721Received.selector
         ) {
           revert UnsafeRecipient();
         }
@@ -453,9 +576,9 @@ abstract contract Spade {
         transferFrom(from, to, id);
 
         if (
-          to.code.length != 0 ||
-          ERC721TokenReceiver(to).onERC721Received(msg.sender, from, id, data) !=
-          ERC721TokenReceiver.onERC721Received.selector
+          to.code.length != 0 &&
+          IERC721TokenReceiver(to).onERC721Received(msg.sender, from, id, data) !=
+          IERC721TokenReceiver.onERC721Received.selector
         ) {
           revert UnsafeRecipient();
         }
@@ -516,9 +639,9 @@ abstract contract Spade {
         _mint(to, id);
 
         if (
-          to.code.length != 0 ||
-          ERC721TokenReceiver(to).onERC721Received(msg.sender, address(0), id, "") !=
-          ERC721TokenReceiver.onERC721Received.selector
+          to.code.length != 0 &&
+          IERC721TokenReceiver(to).onERC721Received(msg.sender, address(0), id, "") !=
+          IERC721TokenReceiver.onERC721Received.selector
         ) {
           revert UnsafeRecipient();
         }
@@ -532,9 +655,9 @@ abstract contract Spade {
         _mint(to, id);
 
         if (
-          to.code.length != 0 ||
-          ERC721TokenReceiver(to).onERC721Received(msg.sender, address(0), id, data) !=
-          ERC721TokenReceiver.onERC721Received.selector
+          to.code.length != 0 &&
+          IERC721TokenReceiver(to).onERC721Received(msg.sender, address(0), id, data) !=
+          IERC721TokenReceiver.onERC721Received.selector
         ) {
           revert UnsafeRecipient();
         }

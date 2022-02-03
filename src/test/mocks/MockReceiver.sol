@@ -2,9 +2,9 @@
 pragma solidity >=0.8.0;
 
 import {Spade} from "../../Spade.sol";
-import {ERC721TokenReceiver} from "../../interfaces/ERC721TokenReceiver.sol";
+import {IERC721TokenReceiver} from "../../interfaces/IERC721TokenReceiver.sol";
 
-contract ERC721User is ERC721TokenReceiver {
+contract ERC721User is IERC721TokenReceiver {
     Spade spade;
 
     constructor(Spade _spade) {
@@ -17,7 +17,7 @@ contract ERC721User is ERC721TokenReceiver {
         uint256,
         bytes calldata
     ) public virtual override returns (bytes4) {
-        return ERC721TokenReceiver.onERC721Received.selector;
+        return IERC721TokenReceiver.onERC721Received.selector;
     }
 
     function approve(address spender, uint256 tokenId) public virtual {

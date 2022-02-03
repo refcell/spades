@@ -20,6 +20,7 @@
     "sync": "make update",
     "test": "make test",
     "snapshot": "make snapshot",
-    "lint": "make lint"
+    "lint": "make lint",
+    "precommit": "make lint && make snapshot"
   }
 }
