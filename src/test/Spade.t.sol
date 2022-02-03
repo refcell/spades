@@ -44,8 +44,11 @@ contract SpadeTest is DSTestPlus {
 
     /// @notice Tests metadata and immutable config
     function testConfig() public {
+        // Metadata
         assert(keccak256(abi.encodePacked((spade.name()))) == keccak256(abi.encodePacked((name))));
         assert(keccak256(abi.encodePacked((spade.symbol()))) == keccak256(abi.encodePacked((symbol))));
+
+        // Immutables
         assert(spade.depositAmount() == depositAmount);
         assert(spade.minPrice() == minPrice);
         assert(spade.commitStart() == commitStart);
@@ -53,7 +56,14 @@ contract SpadeTest is DSTestPlus {
         assert(spade.restrictedMintStart() == restrictedMintStart);
         assert(spade.publicMintStart() == publicMintStart);
         assert(spade.depositToken() == depositToken);
+        assert(spade.priceDecayPerBlock() == priceDecayPerBlock);
+        assert(spade.priceIncreasePerMint() == priceIncreasePerMint);
+
+        // Constants
+        assert(spade.OUTLIER_FLEX() == 5);
         assert(spade.FLEX() == 1);
+        assert(spade.MAX_TOKEN_SUPPLY() == 10_000);
+        assert(spade.MAX_LOSS_PENALTY() == 5_000);
     }
 
     ////////////////////////////////////////////////////
@@ -126,55 +136,55 @@ contract SpadeTest is DSTestPlus {
         assert(spade.count() == uint256(1));
     }
 
-    // /// @notice Test Multiple Reveals
-    // function testMultipleReveals() public {
-    //     // Create a Successful Commitment and Reveal
-    //     bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
-    //     vm.warp(commitStart);
-    //     cloak.commit{value: depositAmount}(commitment);
-    //     vm.warp(revealStart);
-    //     cloak.reveal(uint256(10), blindingFactor);
+    /// @notice Test Multiple Reveals
+    function testMultipleReveals() public {
+        // Create a Successful Commitment and Reveal
+        bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment);
+        vm.warp(revealStart);
+        spade.reveal(uint256(10), blindingFactor);
 
-    //     // Validate Price and Variance Calculations
-    //     assert(cloak.resultPrice() == uint256(10));
-    //     assert(cloak.count() == uint256(1));
+        // Validate Price and Variance Calculations
+        assert(spade.clearingPrice() == uint256(10));
+        assert(spade.count() == uint256(1));
 
-    //     // Initiate Hoax
-    //     startHoax(address(1337), address(1337), type(uint256).max);
+        // Initiate Hoax
+        startHoax(address(1337), address(1337), type(uint256).max);
 
-    //     // Create Another Successful Commitment and Reveal
-    //     bytes32 commitment2 = keccak256(abi.encodePacked(address(1337), uint256(20), blindingFactor));
-    //     vm.warp(commitStart);
-    //     cloak.commit{value: depositAmount}(commitment2);
-    //     vm.warp(revealStart);
-    //     cloak.reveal(uint256(20), blindingFactor);
+        // Create Another Successful Commitment and Reveal
+        bytes32 commitment2 = keccak256(abi.encodePacked(address(1337), uint256(20), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment2);
+        vm.warp(revealStart);
+        spade.reveal(uint256(20), blindingFactor);
 
-    //     // Validate Price and Variance Calculations
-    //     assert(cloak.resultPrice() == uint256(15));
-    //     assert(cloak.count() == uint256(2));
-    //     assert(cloak.rollingVariance() == uint256(50));
+        // Validate Price and Variance Calculations
+        assert(spade.clearingPrice() == uint256(15));
+        assert(spade.count() == uint256(2));
+        assert(spade.rollingVariance() == uint256(50));
         
-    //     // Stop Hoax (prank under-the-hood)
-    //     vm.stopPrank();
+        // Stop Hoax (prank under-the-hood)
+        vm.stopPrank();
 
-    //     // Initiate Another Hoax
-    //     startHoax(address(420), address(420), type(uint256).max);
+        // Initiate Another Hoax
+        startHoax(address(420), address(420), type(uint256).max);
 
-    //     // Create Another Successful Commitment and Reveal
-    //     bytes32 commitment3 = keccak256(abi.encodePacked(address(420), uint256(30), blindingFactor));
-    //     vm.warp(commitStart);
-    //     cloak.commit{value: depositAmount}(commitment3);
-    //     vm.warp(revealStart);
-    //     cloak.reveal(uint256(30), blindingFactor);
+        // Create Another Successful Commitment and Reveal
+        bytes32 commitment3 = keccak256(abi.encodePacked(address(420), uint256(30), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment3);
+        vm.warp(revealStart);
+        spade.reveal(uint256(30), blindingFactor);
 
-    //     // Validate Price and Variance Calculations
-    //     assert(cloak.resultPrice() == uint256(20));
-    //     assert(cloak.count() == uint256(3));
-    //     assert(cloak.rollingVariance() == uint256(100));
+        // Validate Price and Variance Calculations
+        assert(spade.clearingPrice() == uint256(20));
+        assert(spade.count() == uint256(3));
+        assert(spade.rollingVariance() == uint256(100));
         
-    //     // Stop Hoax (prank under-the-hood)
-    //     vm.stopPrank();
-    // }
+        // Stop Hoax (prank under-the-hood)
+        vm.stopPrank();
+    }
 
     // ////////////////////////////////////////////////////
     // ///                  MINT LOGIC                  ///

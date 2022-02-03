@@ -116,6 +116,20 @@ abstract contract Spade {
     /// @notice Optional ERC20 Deposit Token
     address public immutable depositToken;
 
+    /// @notice LBP priceDecayPerBlock config
+    uint256 public immutable priceDecayPerBlock;
+
+    /// @notice LBP priceIncreasePerMint config
+    uint256 public immutable priceIncreasePerMint;
+
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                                  CONSTANTS                              ///
+    ///////////////////////////////////////////////////////////////////////////////
+    
+    /// @dev The outlier scale for loss penalty
+    /// @dev Loss penalty is taken with OUTLIER_FLEX * error as a percent
+    uint256 public constant OUTLIER_FLEX = 5;
+
     /// @notice Flex is a scaling factor for standard deviation in price band calculation
     uint256 public constant FLEX = 1;
 
@@ -126,19 +140,9 @@ abstract contract Spade {
     /// @dev Measured in bips
     uint256 public constant MAX_LOSS_PENALTY = 5_000;
 
-    /// @notice LBP priceDecayPerBlock config
-    uint256 public immutable priceDecayPerBlock;
-
-    /// @notice LBP priceIncreasePerMint config
-    uint256 public immutable priceIncreasePerMint;
-
     ///////////////////////////////////////////////////////////////////////////////
     ///                                CUSTOM STORAGE                           ///
     ///////////////////////////////////////////////////////////////////////////////
-
-    /// @dev The outlier scale for loss penalty
-    /// @dev Loss penalty is taken with OUTLIER_FLEX * error as a percent
-    uint256 public constant OUTLIER_FLEX = 5;
 
     /// @dev The time stored for LBP implementation
     uint256 private mintTime;
@@ -257,7 +261,7 @@ abstract contract Spade {
           uint256 updateTerm = (diff ** 2) / (count + 1);
           rollingVariance = carryTerm + updateTerm;
           // Update clearingPrice_ (new mean)
-          clearingPrice_ = (count * clearingPrice_ + appraisal) / (count + 1);
+          clearingPrice = (count * clearingPrice_ + appraisal) / (count + 1);
         }
         unchecked {
           count += 1;
@@ -275,6 +279,7 @@ abstract contract Spade {
     function restrictedMint() external payable {
         // Verify during mint phase
         if (block.timestamp < restrictedMintStart) revert WrongPhase();
+        if (totalSupply >= MAX_TOKEN_SUPPLY) revert SoldOut();
 
         // Sload the user's appraisal value
         uint256 senderAppraisal = reveals[msg.sender];
@@ -282,7 +287,6 @@ abstract contract Spade {
         // Result value
         uint256 finalValue = clearingPrice;
         if (finalValue < minPrice) finalValue = minPrice;
-
 
         // Use Reveals as a mask
         if (reveals[msg.sender] == 0) revert InvalidAction();
@@ -344,13 +348,16 @@ abstract contract Spade {
         // Sload the user's appraisal value
         uint256 senderAppraisal = reveals[msg.sender];
 
+        // sload depositAmount
+        uint256 sloadDeposit = depositAmount;
+
         // Calculate a Loss penalty
         uint256 clearingPrice_ = clearingPrice;
         uint256 lossPenalty = 0;
         uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
         uint256 diff = senderAppraisal < clearingPrice_ ? clearingPrice_ - senderAppraisal : senderAppraisal - clearingPrice_;
         if (stdDev != 0 && senderAppraisal >= (clearingPrice_ - FLEX * stdDev) && senderAppraisal <= (clearingPrice_ + FLEX * stdDev)) {
-          lossPenalty = ((diff / stdDev) * depositAmount) / 100;
+          lossPenalty = ((diff / stdDev) * sloadDeposit) / 100;
         }
 
         // Set to maximum loss penalty if outlier or too large of a loss
@@ -358,13 +365,13 @@ abstract contract Spade {
         if (stdDev != 0) {
           zscore = diff / stdDev;
         }
-        uint256 maxPenalty = (depositAmount * MAX_LOSS_PENALTY) / 10_000;
+        uint256 maxPenalty = (sloadDeposit * MAX_LOSS_PENALTY) / 10_000;
         if (zscore > 3 || lossPenalty > maxPenalty) {
           lossPenalty = maxPenalty;
         }
 
         // This won't underflow unless the MAX_LOSS_PENALY was misconfigured
-        uint256 amountTransfer = depositAmount - lossPenalty;
+        uint256 amountTransfer = sloadDeposit - lossPenalty;
 
         // Transfer eth or erc20 back to user
         delete reveals[msg.sender];
@@ -384,8 +391,8 @@ abstract contract Spade {
         delete commits[msg.sender];
         uint256 lossyDeposit = depositAmount;
         lossyDeposit = lossyDeposit - ((lossyDeposit * MAX_LOSS_PENALTY) / 10_000);
-        if(depositToken == address(0)) msg.sender.call{value: depositAmount}("");
-        else IERC20(depositToken).transfer(msg.sender, depositAmount);
+        if(depositToken == address(0)) msg.sender.call{value: lossyDeposit}("");
+        else IERC20(depositToken).transfer(msg.sender, lossyDeposit);
     }
 
     /// @notice Allows a user to view if they can mint
@@ -405,7 +412,7 @@ abstract contract Spade {
       if (stdDev != 0) {
         zscore = diff / stdDev;
       }
-      mintable = zscore > 3;
+      mintable = zscore > 3 && (totalSupply + 1) <= MAX_TOKEN_SUPPLY;
     }
 
     ///////////////////////////////////////////////////////////////////////////////
