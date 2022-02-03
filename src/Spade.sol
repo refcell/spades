@@ -176,7 +176,7 @@ abstract contract Spade {
     mapping(address => uint256) public reveals;
 
     /// @notice Maps User to how many tokens they've minted
-    mapping(address => uint8) public minted;
+    mapping(address => uint256) public minted;
 
     ///////////////////////////////////////////////////////////////////////////////
     ///                                ERC721 STORAGE                           ///
@@ -467,7 +467,7 @@ abstract contract Spade {
     function mint(uint256 amount) external payable {
         if (block.timestamp < publicMintStart) revert WrongPhase();
         if (totalSupply >= MAX_TOKEN_SUPPLY) revert SoldOut();
-        if (minted[msg.sender] + amount >= MAX_MINT_PER_ACCOUNT) revert MaxTokensMinted();
+        if (minted[msg.sender] + amount > MAX_MINT_PER_ACCOUNT) revert MaxTokensMinted();
 
         // Calculate the mint price
         uint256 memMintTime = mintTime;

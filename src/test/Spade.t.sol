@@ -643,4 +643,47 @@ contract SpadeTest is DSTestPlus {
         vm.stopPrank();
     }
 
+    /// @notice Test Max Public Minting
+    function testPublicMintingMax() public {
+        // Commit+Reveal 1
+        startHoax(address(69), address(69), depositAmount);
+        bytes32 commitment = keccak256(abi.encodePacked(address(69), uint256(10), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment);
+        vm.warp(revealStart);
+        spade.reveal(uint256(10), blindingFactor);
+        vm.stopPrank();
+
+        // Mint should fail in restricted phase
+        vm.warp(publicMintStart);
+
+        // We should be able to mint now
+        assert(spade.canMint(1) == true);
+
+        // We can mint from a token receiver context
+        uint256 maxMintAmount = spade.MAX_MINT_PER_ACCOUNT();
+        uint256 inialClearingPrice = spade.clearingPrice();
+        startHoax(address(receiver), address(receiver), type(uint256).max);
+
+        // We should be able to mint the max amount
+        assert(spade.canMint(maxMintAmount) == true);
+
+        // Mint
+        spade.mint{value: 10 * maxMintAmount}(maxMintAmount);
+        assert(spade.balanceOf(address(receiver)) == maxMintAmount);
+        assert(spade.totalSupply() == maxMintAmount);
+
+        // The clearing price should be bumped up since it's an LBP
+        assert(spade.clearingPrice() == inialClearingPrice + maxMintAmount);
+        assert(spade.mintPrice(1) == inialClearingPrice + maxMintAmount);
+        
+        // We can't mint more than the maximum amount
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("MaxTokensMinted()"))));
+        spade.mint{value: inialClearingPrice + maxMintAmount}(1);
+
+        // We shouldn't be able to mint
+        assert(spade.canMint(1) == false);
+
+        vm.stopPrank();
+    }
 }
