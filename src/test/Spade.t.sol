@@ -66,9 +66,9 @@ contract SpadeTest is DSTestPlus {
         assert(spade.MAX_LOSS_PENALTY() == 5_000);
     }
 
-    ////////////////////////////////////////////////////
-    ///                 COMMIT LOGIC                 ///
-    ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                               COMMIT LOGIC                              ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     /// @notice Test Commitments
     function testCommit() public {
@@ -96,9 +96,9 @@ contract SpadeTest is DSTestPlus {
         spade.commit{value: depositAmount}(commitment);
     }
 
-    ////////////////////////////////////////////////////
-    ///                 REVEAL LOGIC                 ///
-    ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                               REVEAL LOGIC                              ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     /// @notice Test Reveals
     function testReveal(uint256 invalidConcealedBid) public {
@@ -186,9 +186,9 @@ contract SpadeTest is DSTestPlus {
         vm.stopPrank();
     }
 
-    ///////////////////////////////////////////////////////////////
-    ///                  RESTRICTED MINT LOGIC                  ///
-    ///////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                          RESTRICTED MINT LOGIC                          ///
+    ///////////////////////////////////////////////////////////////////////////////
 
     /// @notice Test Restricted Minting
     function testRestrictedMinting() public {
@@ -346,118 +346,132 @@ contract SpadeTest is DSTestPlus {
         vm.stopPrank();
     }
 
-    // ////////////////////////////////////////////////////
-    // ///                  FORGO LOGIC                 ///
-    // ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                                FORGO LOGIC                              ///
+    ///////////////////////////////////////////////////////////////////////////////
 
-    // /// @notice Test Forgos
-    // function testForgo() public {
-    //     // Commit+Reveal
-    //     bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
-    //     vm.warp(commitStart);
-    //     cloak.commit{value: depositAmount}(commitment);
-    //     vm.warp(revealStart);
-    //     cloak.reveal(uint256(10), blindingFactor);
+    /// @notice Test Forgos
+    function testForgo() public {
+        // Commit+Reveal
+        bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment);
+        vm.warp(revealStart);
+        spade.reveal(uint256(10), blindingFactor);
 
-    //     // Forgo fails outside mint phase
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
-    //     cloak.forgo();
+        // Forgo fails outside mint phase
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
+        spade.forgo();
 
-    //     // We should be able to forgo
-    //     vm.warp(mintStart);
-    //     assert(cloak.reveals(address(this)) != 0);
-    //     cloak.forgo();
-    //     assert(cloak.reveals(address(this)) == 0);
-    //     assert(cloak.balanceOf(address(this)) == 0);
-    //     assert(cloak.totalSupply() == 0);
+        vm.warp(restrictedMintStart);
 
-    //     // Double forgos are prevented with Reveals Mask
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidAction()"))));
-    //     cloak.forgo();
-    // }
+        // Random User can't forgo
+        startHoax(address(69), address(69), type(uint256).max);
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidAction()"))));
+        spade.forgo();
+        vm.stopPrank();
 
-    //     /// @notice Test Multiple Forgos
-    // function testMultipleForgos() public {
-    //     // Commit+Reveal 1
-    //     bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
-    //     vm.warp(commitStart);
-    //     cloak.commit{value: depositAmount}(commitment);
-    //     vm.warp(revealStart);
-    //     cloak.reveal(uint256(10), blindingFactor);
+        // We should be able to forgo
+        assert(spade.reveals(address(this)) != 0);
+        spade.forgo();
+        assert(spade.reveals(address(this)) == 0);
+        assert(spade.balanceOf(address(this)) == 0);
+        assert(spade.totalSupply() == 0);
 
-    //     // Commit+Reveal 2
-    //     startHoax(address(1337), address(1337), type(uint256).max);
-    //     bytes32 commitment2 = keccak256(abi.encodePacked(address(1337), uint256(20), blindingFactor));
-    //     vm.warp(commitStart);
-    //     cloak.commit{value: depositAmount}(commitment2);
-    //     vm.warp(revealStart);
-    //     cloak.reveal(uint256(20), blindingFactor);
-    //     vm.stopPrank();
+        // Double forgos are prevented with Reveals Mask
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidAction()"))));
+        spade.forgo();
+    }
 
-    //     // Commit+Reveal 3
-    //     startHoax(address(420), address(420), type(uint256).max);
-    //     bytes32 commitment3 = keccak256(abi.encodePacked(address(420), uint256(30), blindingFactor));
-    //     vm.warp(commitStart);
-    //     cloak.commit{value: depositAmount}(commitment3);
-    //     vm.warp(revealStart);
-    //     cloak.reveal(uint256(30), blindingFactor);
-    //     vm.stopPrank();
+    /// @notice Test Multiple Forgos
+    function testMultipleForgos() public {
+        // Commit+Reveal 1
+        bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment);
+        vm.warp(revealStart);
+        spade.reveal(uint256(10), blindingFactor);
 
-    //     // Forgo fails outside mint phase
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
-    //     cloak.forgo();
+        // Commit+Reveal 2
+        startHoax(address(1337), address(1337), type(uint256).max);
+        bytes32 commitment2 = keccak256(abi.encodePacked(address(1337), uint256(20), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment2);
+        vm.warp(revealStart);
+        spade.reveal(uint256(20), blindingFactor);
+        vm.stopPrank();
 
-    //     // We should be able to forgo
-    //     vm.warp(mintStart);
-    //     assert(cloak.reveals(address(this)) != 0);
-    //     cloak.forgo();
-    //     assert(cloak.reveals(address(this)) == 0);
-    //     assert(cloak.balanceOf(address(this)) == 0);
-    //     assert(cloak.totalSupply() == 0);
+        // Commit+Reveal 3
+        startHoax(address(420), address(420), type(uint256).max);
+        bytes32 commitment3 = keccak256(abi.encodePacked(address(420), uint256(30), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment3);
+        vm.warp(revealStart);
+        spade.reveal(uint256(30), blindingFactor);
+        vm.stopPrank();
 
-    //     // Double forgos are prevented with Reveals Mask
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidAction()"))));
-    //     cloak.forgo();
+        // Forgo fails outside mint phase
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
+        spade.forgo();
 
-    //     // Next user forgos
-    //     startHoax(address(1337), address(1337), type(uint256).max);
-    //     vm.warp(mintStart);
-    //     cloak.forgo();
-    //     assert(cloak.balanceOf(address(1337)) == 0);
-    //     assert(cloak.totalSupply() == 0);
-    //     vm.stopPrank();
+        // We should be able to forgo
+        vm.warp(restrictedMintStart);
+        assert(spade.reveals(address(this)) != 0);
+        spade.forgo();
+        assert(spade.reveals(address(this)) == 0);
+        assert(spade.balanceOf(address(this)) == 0);
+        assert(spade.totalSupply() == 0);
 
-    //     // Third user forgos
-    //     startHoax(address(420), address(420), type(uint256).max);
-    //     vm.warp(mintStart);
-    //     cloak.forgo();
-    //     assert(cloak.balanceOf(address(420)) == 0);
-    //     assert(cloak.totalSupply() == 0);
-    //     vm.stopPrank();
-    // }
+        // Double forgos are prevented with Reveals Mask
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidAction()"))));
+        spade.forgo();
 
-    // ////////////////////////////////////////////////////
-    // ///                  LOST REVEALS                ///
-    // ////////////////////////////////////////////////////
+        // Next user forgos
+        startHoax(address(1337), address(1337), type(uint256).max);
+        spade.forgo();
+        assert(spade.balanceOf(address(1337)) == 0);
+        assert(spade.totalSupply() == 0);
+        vm.stopPrank();
 
-    // /// @notice Tests deposit withdrawals on reveal miss
-    // function testLostReveal() public {
-    //     // Commit
-    //     bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
-    //     vm.warp(commitStart);
-    //     cloak.commit{value: depositAmount}(commitment);
-    //     vm.warp(revealStart);
+        // Third user forgos
+        startHoax(address(420), address(420), type(uint256).max);
+        spade.forgo();
+        assert(spade.balanceOf(address(420)) == 0);
+        assert(spade.totalSupply() == 0);
+        vm.stopPrank();
+    }
 
-    //     // Should fail to withdraw since still reveal phase
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
-    //     cloak.lostReveal(); 
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                                LOST REVEALS                             ///
+    ///////////////////////////////////////////////////////////////////////////////
 
-    //     // Skip reveal and withdraw
-    //     vm.warp(mintStart);
-    //     cloak.lostReveal();
+    /// @notice Tests deposit withdrawals on reveal miss
+    function testLostReveal() public {
+        startHoax(address(69), address(69), depositAmount);
+        bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment);
+        vm.warp(revealStart);
 
-    //     // We shouldn't be able to withdraw again since commitment is gone
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidAction()"))));
-    //     cloak.lostReveal(); 
-    // }
+        // Should fail to withdraw since still reveal phase
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
+        spade.lostReveal();
+
+        // Skip reveal and withdraw
+        assert(address(69).balance == 0);
+        vm.warp(restrictedMintStart);
+        spade.lostReveal();
+        assert(address(69).balance == (spade.MAX_LOSS_PENALTY() * depositAmount) / 10_000);
+
+        // We shouldn't be able to withdraw again since commitment is gone
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidAction()"))));
+        spade.lostReveal(); 
+        vm.stopPrank();
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////
+    ///                              PUBLIC LBP LOGIC                           ///
+    ///////////////////////////////////////////////////////////////////////////////
+
+
 }
