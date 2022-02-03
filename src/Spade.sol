@@ -67,6 +67,8 @@ abstract contract Spade {
 
     error Outlier();
 
+    error MaxTokensMinted();
+
     ///////////////////////////////////////////////////////////////////////////////
     ///                                   EVENTS                                ///
     ///////////////////////////////////////////////////////////////////////////////
@@ -144,6 +146,9 @@ abstract contract Spade {
     /// @dev Measured in bips
     uint256 public constant MAX_DISCOUNT_FACTOR = 2_000;
 
+    /// @notice The maximum number of tokens per mint during the public LBP
+    uint256 public constant MAX_MINT_PER_ACCOUNT = 5;
+
     ///////////////////////////////////////////////////////////////////////////////
     ///                                CUSTOM STORAGE                           ///
     ///////////////////////////////////////////////////////////////////////////////
@@ -169,6 +174,9 @@ abstract contract Spade {
 
     /// @notice The resulting user appraisals
     mapping(address => uint256) public reveals;
+
+    /// @notice Maps User to how many tokens they've minted
+    mapping(address => uint8) public minted;
 
     ///////////////////////////////////////////////////////////////////////////////
     ///                                ERC721 STORAGE                           ///
@@ -459,6 +467,7 @@ abstract contract Spade {
     function mint(uint256 amount) external payable {
         if (block.timestamp < publicMintStart) revert WrongPhase();
         if (totalSupply >= MAX_TOKEN_SUPPLY) revert SoldOut();
+        if (minted[msg.sender] + amount >= MAX_MINT_PER_ACCOUNT) revert MaxTokensMinted();
 
         // Calculate the mint price
         uint256 memMintTime = mintTime;
@@ -473,6 +482,9 @@ abstract contract Spade {
         if (depositToken != address(0)) {
           IERC20(depositToken).transferFrom(msg.sender, address(this), mintPrice * amount);
         }
+
+        // Increment amount minted before minting to prevent re-entrancy
+        minted[msg.sender] += amount;
 
         // Mint and Update
         for (uint256 i = 0; i < amount; i++) {
@@ -500,7 +512,8 @@ abstract contract Spade {
     /// @param amount The amount of tokens to mint
     /// @return allowed If the sender is allowed to mint
     function canMint(uint256 amount) external view returns (bool allowed) {
-      allowed = block.timestamp >= publicMintStart && (totalSupply + amount) < MAX_TOKEN_SUPPLY;
+      uint256 myTotalMinted = minted[msg.sender] + amount;
+      allowed = myTotalMinted <= MAX_MINT_PER_ACCOUNT && block.timestamp >= publicMintStart && (totalSupply + amount) < MAX_TOKEN_SUPPLY;
     }
 
     ///////////////////////////////////////////////////////////////////////////////

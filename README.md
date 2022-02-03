@@ -2,6 +2,8 @@
 
 **S**ealed **P**rice **A**ppraisals for **D**eterministic **E**missions.
 
+### ✨✨✨✨✨✨✨
+
 ```m
 ///       ?????????????????????????????????????? . ######################################      ///
 ///       ?????????????????????????????????????  %  #####################################      ///
@@ -37,6 +39,7 @@ This leads to gas wars and bag shilling, often enabled by gated whitelists.
 
 [Spades](https://github.com/abigger87/spades) is an attempt to maximize the ERC721 drop tradeoff by building off of [Cloaks](https://github.com/abigger87/cloaks).
 
+TL;DR - [Spades](https://github.com/abigger87/spades) is an ERC721 with a builtin commit-reveal scheme to determine the initial clearing price of an LBP.
 
 ## How it works
 
@@ -94,62 +97,44 @@ The `forgo()` function will return the `depositAmount` less a loss penalty inver
 
 #### Phase 4 - Public LBP
 
-At this point, if the token supply is not max
+At this point, if not all ERC721 tokens are minted (`tokenSupply < MAX_TOKEN_SUPPLY`), minting is enabled for everyone, including non-commitment participants.
+
+When `block.timestamp` is greater than or equal to `publicMintStart`, the `mint(uint256)` function can be called, supplying the number of tokens to be minted.
+
+The public `mint` function requires ether to be sent or the `depositToken` will be transferred at an initial amount equal to the `clearingPrice` (or the `minPrice` if `clearingPrice < minPrice`).
+
+**With one important caveat** - the price to mint is modeled after an LBP.
+
+That is, on each new token minted, the price to mint another token increase by `priceIncreasePerMint` and on each new block, the price decreases by `priceDecayPerBlock`.
+
+⚠️ NOTE ⚠️ no more than `MAX_MINT_PER_ACCOUNT` can be minted per account (except for the commitment participants who can mint `MAX_MINT_PER_ACCOUNT + 1`).
 
 
+## Motivation
 
-
-The initial lbp price for the restricted mint period is calculated as the mean of the revealed commitments.
-
-Where a participant's discount to the public mint price during the restricted mint is inversly proportional to how close their appraisal was to the mean. 
-
-
-
-
-#### ....
-
+Essentially the same as [cloaks](https://github.com/abigger87/cloaks).
 
 Mints suck...
 
 They're difficult to mint, oft impossible.
+
 The mint price is fixed - artists and creators don't realize upside.
 
-Is this fixable?
-
-The answer: not without tradeoffs.
-
-To satisfy this, spades sacrifices ordering (first-come first-serve) for price-discovery and gas efficiency.
-
-_How_ does this work?
-
-spades start with a commit phase, that lasts for an arbitrarily long period to prevent gas wars.
-During the commit phase, anyone can call `commit()`, providing a sealed bid price (appraisal) and sending `depositAmount` of a token to the Cloak.
-
-This is possible by using a commitment scheme where the sealed value is hashed and revealed in the next phase.
-Read more on commitment schemes [here](https://medium.com/swlh/exploring-commit-reveal-schemes-on-ethereum-c4ff5a777db8). 
-
-Once the commit phase ends, everyone who commited values then calls `reveal()`, providing the bid price. Once this function is called, the sender's sealed bid is becomes public.
-
-NOTE: Commitments can only be made during the commit phase.
-
-Once the reveal phase ends, Cloak enters the third and last phase - the mint phase.
-
-At this time, the mint price is determined by taking the mean of all the revealed bids. The final mint price is the max of either this calculated price or the `minPrice` set by the Cloak creator.
-
-To incentivize bid accuracy, only bids that are in the range of [`resultPrice - flex * stdDev`, `resultPrice + flex * stdDev`], where `flex` is a scalar value set by the Cloak creator.
-
-Anyone who isn't in this range can call `forgo()` to withdraw their deposit token.
-
-If a user ends up in the range and forgos, they suffer a loss penalty proportional to how close they are to the resulting price.
-Additionally, if a bid is an outlier, a loss penalty is incurred proportional to a Z-Score.
-
-NOTE: If a commitooor forgets to reveal their sealed bid, they can call `lostReveal()` to withdraw their deposit.
+Whitelists, gating methods, and gas wars prevent any semblance of a fair mint.
 
 ## Extremely Technical Docs
 
-![spade](./assets/spades.jpeg)
+Phases
 
+![phases](./assets/phases.jpg)
 
+Rolling Variance Calculation
+
+![rolling_variance](./assets/rolling_variance.png)
+
+Rolling Mean Calculation
+
+![rolling_mean](./assets/rolling_mean.png)
 
 ## Blueprint
 
@@ -169,6 +154,8 @@ src
 
 A [Spade](https://github.com/abigger87/spades) is an extensible ERC721 implementation with a commit-reveal scheme and lbp built _into_ the ERC721 contract itself.
 The only contract is located in [src/](./src/) called [Spade](./src/Spade.sol).
+
+It is an abstract contract and requires an implementation for `tokenURI` as in [MockSpade](./src/test/mocks/MockSpade.sol);
 
 Both [DappTools](https://dapp.tools/) and [Foundry](https://github.com/gaskonst/foundry) are supported. Installation instructions for both are included below.
 
@@ -238,6 +225,7 @@ Using [foundry.toml](./foundry.toml), Foundry is easily configurable.
 - [solmate](https://github.com/Rari-Capital/solmate)
 - [forge-std](https://github.com/brockelmore/forge-std)
 - [clones-with-immutable-args](https://github.com/wighawag/clones-with-immutable-args).
+- [Brock Elmore](https://github.com/brockelmore) for [forge-std](https://github.com/brockelmore/forge-std)
 - [foundry-toolchain](https://github.com/onbjerg/foundry-toolchain) by [onbjerg](https://github.com/onbjerg).
 - [forge-template](https://github.com/FrankieIsLost/forge-template) by [FrankieIsLost](https://github.com/FrankieIsLost).
 - [Georgios Konstantopoulos](https://github.com/gakonst) for [forge-template](https://github.com/gakonst/forge-template) resource.
