@@ -31,6 +31,45 @@
 
 ## Overview
 
+Current mints sacrifice both price-discovery and gas efficiency for ordering.
+
+This leads to gas wars and bag shilling, often enabled by gated whitelists.
+
+[Spades](https://github.com/abigger87/spades) is an attempt to maximize the ERC721 drop tradeoff by building off of [Cloaks](https://github.com/abigger87/cloaks).
+
+
+## How it works
+
+Spades is an ERC721 Token with built-in minting broken down into four phases.
+
+#### Phase 1 - Commitments
+
+Spades begins with a commit phase that lasts from `commitStart` to `revealStart`.
+
+During the commit phase, anyone can permissionlessly call the `commit(bytes32)` function, passing in a hashed commitment (32 bytes).
+
+The hashed commitment includes an appraisal price (at which each ERC721 token should be valued) along with a `blindingFactor` that prevents hash table attacks.
+
+Calling the commitment also requires a `depositAmount` of ether or the `depositToken` to prevent commitment spam.
+
+#### Phase 2 - Reveals
+
+At this point, there are a bunch of commitments stored in the Spades Contract.
+
+Once the Reveal Phase begins when the `block.timestamp` reaches `revealStart`, participants from phase 1 can reveal their appraisal by calling the `reveal(uint256,bytes32)` function.
+
+Where the first argument is the appraisal value and the second is the `blindingFactor`.
+
+Once this function is called, the sender's sealed appraisal becomes public.
+
+⚠️ NOTE ⚠️  If a commit phase participant fails to reveal their commitment, they will incur the Spade's `MAX_LOSS_PENALTY` (in bips) on their deposit. After the reveal phase, the user may call `lostReveal()` to extract the remainder of their deposit.
+
+#### Phase 3 - Restricted Mint
+
+Now that all appraisals have been revealed, a 
+
+
+
 
 The initial lbp price for the restricted mint period is calculated as the mean of the revealed commitments.
 
