@@ -2,7 +2,7 @@
 
 **S**ealed **P**rice **A**ppraisals for **D**eterministic **E**missions.
 
-#### ✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨
+#### ✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨
 
 ```m
 ???????????????????????????????????????????????? . ###############################################
@@ -126,19 +126,19 @@ Whitelists, gating methods, and gas wars prevent any semblance of a fair mint.
 
 Phases
 
-<img src='./assets/phases.png' width='50'>
+<img src='./assets/phases.jpg' width='300'>
 
 ![phases](./assets/phases.jpg)
 
 Rolling Variance Calculation
 
-<img src='./assets/rolling_variance.png' width='50'>
+<img src='./assets/rolling_variance.png' width='300'>
 
 ![rolling_variance](./assets/rolling_variance.png)
 
 Rolling Mean Calculation
 
-<img src='./assets/rolling_mean.png' width='50'>
+<img src='./assets/rolling_mean.png' width='300'>
 
 ![rolling_mean](./assets/rolling_mean.png)
 
