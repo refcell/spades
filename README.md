@@ -62,11 +62,39 @@ Where the first argument is the appraisal value and the second is the `blindingF
 
 Once this function is called, the sender's sealed appraisal becomes public.
 
-⚠️ NOTE ⚠️  If a commit phase participant fails to reveal their commitment, they will incur the Spade's `MAX_LOSS_PENALTY` (in bips) on their deposit. After the reveal phase, the user may call `lostReveal()` to extract the remainder of their deposit.
+⚠️ NOTE ⚠️ If a commit phase participant fails to reveal their commitment, they will incur the Spade's `MAX_LOSS_PENALTY` (in bips) on their deposit. After the reveal phase, the user may call `lostReveal()` to extract the remainder of their deposit.
 
 #### Phase 3 - Restricted Mint
 
-Now that all appraisals have been revealed, a 
+When the timestamp reaches `restrictedMintStart`, the reveal phase ends and the Restricted mint period begins.
+
+Since all appraisals have been revealed, a `clearingPrice` can be calculated as the mean of all committed appraisals.
+
+This is the starting mint price.
+
+Participants who revealed their appraisals can now call `restrictedMint()` to mint one ERC721 token at a **discounted** price.
+
+Calling `restrictedMint()` requires the discounted price to be sent in ether or will be transferred from the user for the specified `depositToken`.
+
+Where the discount is proportional to how close their appraisal value was to the calculated `clearingPrice`.
+
+⚠️ NOTE ⚠️ Outliers (normally a zscore of 3, but for tighter bounds Spades uses a zscore of 2) cannot mint.
+
+Also note, the max discount factor is 2,000 bips or 20% off the `clearingPrice`.
+
+To view their discount price, a particpant can call the `restrictedMintPrice()` function.
+
+To check restricted minting eligibility, a participany can call the `canRestrictedMint()` function.
+
+Additionally, a user can choose to `forgo()` their mint allocation (outliers must do this to recover part of their deposit).
+
+The `forgo()` function will return the `depositAmount` less a loss penalty inversely related to how close their appraisal was to the `clearingPrice`.
+
+⚠️ NOTE ⚠️ Outliers will lose the `MAX_LOSS_PENALTY`.
+
+#### Phase 4 - Public LBP
+
+At this point, if the token supply is not max
 
 
 
