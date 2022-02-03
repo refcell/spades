@@ -162,7 +162,7 @@ contract SpadeTest is DSTestPlus {
         // Validate Price and Variance Calculations
         assert(spade.clearingPrice() == uint256(15));
         assert(spade.count() == uint256(2));
-        assert(spade.rollingVariance() == uint256(50));
+        assert(spade.rollingVariance() == uint256(25));
         
         // Stop Hoax (prank under-the-hood)
         vm.stopPrank();
@@ -180,7 +180,7 @@ contract SpadeTest is DSTestPlus {
         // Validate Price and Variance Calculations
         assert(spade.clearingPrice() == uint256(20));
         assert(spade.count() == uint256(3));
-        assert(spade.rollingVariance() == uint256(100));
+        assert(spade.rollingVariance() == uint256(66));
         
         // Stop Hoax (prank under-the-hood)
         vm.stopPrank();
@@ -212,6 +212,10 @@ contract SpadeTest is DSTestPlus {
         // The expected discount is 2_000 bips
         assert(spade.restrictedMintPrice() == 8);
 
+        // Check parameters
+        assert(spade.clearingPrice() == 10);
+        assert(spade.rollingVariance() == 0);
+
         // We should be able to mint
         assert(spade.canRestrictedMint() == true);
         spade.restrictedMint{value: 8}();
@@ -225,68 +229,122 @@ contract SpadeTest is DSTestPlus {
         spade.restrictedMint{value: 8}();
     }
 
-    // /// @notice Test Multiple Mints
-    // function testMultipleMints() public {
-    //     // Commit+Reveal 1
-    //     bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
-    //     vm.warp(commitStart);
-    //     cloak.commit{value: depositAmount}(commitment);
-    //     vm.warp(revealStart);
-    //     cloak.reveal(uint256(10), blindingFactor);
+    /// @notice Test Multiple Restricted Mints
+    function testMultipleRestrictedMints() public {
+        // Commit+Reveal 1
+        bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment);
+        vm.warp(revealStart);
+        spade.reveal(uint256(10), blindingFactor);
 
-    //     // Commit+Reveal 2
-    //     startHoax(address(1337), address(1337), type(uint256).max);
-    //     bytes32 commitment2 = keccak256(abi.encodePacked(address(1337), uint256(20), blindingFactor));
-    //     vm.warp(commitStart);
-    //     cloak.commit{value: depositAmount}(commitment2);
-    //     vm.warp(revealStart);
-    //     cloak.reveal(uint256(20), blindingFactor);
-    //     vm.stopPrank();
+        // Commit+Reveal 2
+        startHoax(address(1337), address(1337), type(uint256).max);
+        bytes32 commitment2 = keccak256(abi.encodePacked(address(1337), uint256(20), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment2);
+        vm.warp(revealStart);
+        spade.reveal(uint256(20), blindingFactor);
+        vm.stopPrank();
 
-    //     // Commit+Reveal 3
-    //     startHoax(address(420), address(420), type(uint256).max);
-    //     bytes32 commitment3 = keccak256(abi.encodePacked(address(420), uint256(30), blindingFactor));
-    //     vm.warp(commitStart);
-    //     cloak.commit{value: depositAmount}(commitment3);
-    //     vm.warp(revealStart);
-    //     cloak.reveal(uint256(30), blindingFactor);
-    //     vm.stopPrank();
+        // Commit+Reveal 3
+        startHoax(address(420), address(420), type(uint256).max);
+        bytes32 commitment3 = keccak256(abi.encodePacked(address(420), uint256(30), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment3);
+        vm.warp(revealStart);
+        spade.reveal(uint256(30), blindingFactor);
+        vm.stopPrank();
 
-    //     // Minting fails outside mint phase
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
-    //     cloak.mint();
+        // Commit+Reveal 4
+        startHoax(address(69), address(69), type(uint256).max);
+        bytes32 commitment4 = keccak256(abi.encodePacked(address(69), uint256(40), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment4);
+        vm.warp(revealStart);
+        spade.reveal(uint256(40), blindingFactor);
+        vm.stopPrank();
 
-    //     // Mint should fail without value
-    //     vm.warp(mintStart);
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("InsufficientValue()"))));
-    //     cloak.mint();
+        // Commit+Reveal 5
+        startHoax(address(2), address(2), type(uint256).max);
+        bytes32 commitment5 = keccak256(abi.encodePacked(address(2), uint256(60), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment5);
+        vm.warp(revealStart);
+        spade.reveal(uint256(60), blindingFactor);
+        vm.stopPrank();
 
-    //     // We should be able to mint
-    //     cloak.mint{value: 20}();
-    //     assert(cloak.reveals(address(this)) == 0);
-    //     assert(cloak.balanceOf(address(this)) == 1);
-    //     assert(cloak.totalSupply() == 1);
+        // Can't mint outside restrictedMintPhase
+        assert(spade.canRestrictedMint() == false);
 
-    //     // Double mints are prevented with Reveals Mask
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidAction()"))));
-    //     cloak.mint{value: 20}();
+        // Check parameters
+        assert(spade.clearingPrice() == 32);
+        assert(spade.rollingVariance() == 295);
 
-    //     // Next user mints
-    //     startHoax(address(1337), address(1337), type(uint256).max);
-    //     vm.warp(mintStart);
-    //     cloak.mint{value: 20}();
-    //     assert(cloak.balanceOf(address(1337)) == 1);
-    //     assert(cloak.totalSupply() == 2);
-    //     vm.stopPrank();
+        // Mint should fail without value
+        vm.warp(restrictedMintStart);
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("InsufficientValue()"))));
+        spade.restrictedMint();
 
-    //     // Third user mints
-    //     startHoax(address(420), address(420), type(uint256).max);
-    //     vm.warp(mintStart);
-    //     cloak.mint{value: 20}();
-    //     assert(cloak.balanceOf(address(420)) == 1);
-    //     assert(cloak.totalSupply() == 3);
-    //     vm.stopPrank();
-    // }
+        // Check Expected Discounts
+        // The commitments closest to the clearingPrice should have a lower mint price
+        assert(spade.restrictedMintPrice() == 29);
+        startHoax(address(1337), address(1337), type(uint256).max);
+        assert(spade.restrictedMintPrice() == 26);
+        vm.stopPrank();
+        startHoax(address(420), address(420), type(uint256).max);
+        assert(spade.restrictedMintPrice() == 26);
+        vm.stopPrank();
+        startHoax(address(69), address(69), type(uint256).max);
+        assert(spade.restrictedMintPrice() == 26);
+        vm.stopPrank();
+        startHoax(address(2), address(2), type(uint256).max);
+        assert(spade.restrictedMintPrice() == 29);
+        vm.stopPrank();
+
+        // We should be able to mint
+        assert(spade.canRestrictedMint() == true);
+        spade.restrictedMint{value: 29}();
+        assert(spade.reveals(address(this)) == 0);
+        assert(spade.balanceOf(address(this)) == 1);
+        assert(spade.totalSupply() == 1);
+
+        // Double mints are prevented with Reveals Mask
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidAction()"))));
+        spade.restrictedMint{value: 29}();
+
+        // Next user mints
+        startHoax(address(1337), address(1337), type(uint256).max);
+        vm.warp(restrictedMintStart);
+        spade.restrictedMint{value: 26}();
+        assert(spade.balanceOf(address(1337)) == 1);
+        assert(spade.totalSupply() == 2);
+        vm.stopPrank();
+
+        // Third user mints
+        startHoax(address(420), address(420), type(uint256).max);
+        vm.warp(restrictedMintStart);
+        spade.restrictedMint{value: 26}();
+        assert(spade.balanceOf(address(420)) == 1);
+        assert(spade.totalSupply() == 3);
+        vm.stopPrank();
+
+        // Fourth user mints
+        startHoax(address(69), address(69), type(uint256).max);
+        vm.warp(restrictedMintStart);
+        spade.restrictedMint{value: 26}();
+        assert(spade.balanceOf(address(69)) == 1);
+        assert(spade.totalSupply() == 4);
+        vm.stopPrank();
+
+        // Fifth user mints
+        startHoax(address(2), address(2), type(uint256).max);
+        vm.warp(restrictedMintStart);
+        spade.restrictedMint{value: 29}();
+        assert(spade.balanceOf(address(2)) == 1);
+        assert(spade.totalSupply() == 5);
+        vm.stopPrank();
+    }
 
     // ////////////////////////////////////////////////////
     // ///                  FORGO LOGIC                 ///

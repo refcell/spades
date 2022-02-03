@@ -1,4 +1,5 @@
 testCommit() (gas: 53761)
-testConfig() (gas: 18098)
-testMultipleReveals() (gas: 256345)
-testReveal(uint256) (runs: 256, μ: 115420, ~: 115422)
+testConfig() (gas: 18186)
+testMultipleReveals() (gas: 256411)
+testRestrictedMinting() (gas: 219487)
+testReveal(uint256) (runs: 256, μ: 115508, ~: 115510)

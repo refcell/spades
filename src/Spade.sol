@@ -258,14 +258,18 @@ abstract contract Spade {
         if (count == 0) {
           clearingPrice = appraisal;
         } else {
-          // we have two or more values now so we calculate variance
           uint256 clearingPrice_ = clearingPrice;
-          uint256 carryTerm = ((count - 1) * rollingVariance) / count;
-          uint256 diff = appraisal < clearingPrice_ ? clearingPrice_ - appraisal : appraisal - clearingPrice_;
-          uint256 updateTerm = (diff ** 2) / (count + 1);
-          rollingVariance = carryTerm + updateTerm;
+          uint256 newClearingPrice = (count * clearingPrice_ + appraisal) / (count + 1);
+
+          uint256 carryTerm = count * rollingVariance;
+          uint256 clearingDiff = clearingPrice_ > newClearingPrice ?  clearingPrice_ - newClearingPrice : newClearingPrice - clearingPrice_;
+          uint256 deviationUpdate = count * (clearingDiff ** 2);
+          uint256 meanUpdate = appraisal < newClearingPrice ? newClearingPrice - appraisal : appraisal - newClearingPrice;
+          uint256 updateTerm = meanUpdate ** 2;
+          rollingVariance = (deviationUpdate + carryTerm + updateTerm) / (count + 1);
+
           // Update clearingPrice_ (new mean)
-          clearingPrice = (count * clearingPrice_ + appraisal) / (count + 1);
+          clearingPrice = newClearingPrice;
         }
         unchecked {
           count += 1;
