@@ -391,17 +391,14 @@ abstract contract Spade {
         uint256 lossPenalty = 0;
         uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
         uint256 diff = senderAppraisal < clearingPrice_ ? clearingPrice_ - senderAppraisal : senderAppraisal - clearingPrice_;
-        if (stdDev != 0 && senderAppraisal >= (clearingPrice_ - FLEX * stdDev) && senderAppraisal <= (clearingPrice_ + FLEX * stdDev)) {
-          lossPenalty = ((diff / stdDev) * sloadDeposit) / 100;
-        }
-
-        // Set to maximum loss penalty if outlier or too large of a loss
         uint256 zscore = 0;
         if (stdDev != 0) {
           zscore = diff / stdDev;
+          lossPenalty = (zscore * sloadDeposit) / 100;
         }
         uint256 maxPenalty = (sloadDeposit * MAX_LOSS_PENALTY) / 10_000;
-        if (zscore > 3 || lossPenalty > maxPenalty) {
+        // Use an outlier bounds of 2 - realistically it should be 3
+        if (zscore >= 2 || lossPenalty > maxPenalty) {
           lossPenalty = maxPenalty;
         }
 

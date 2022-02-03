@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity >=0.8.0;
 
+import {MockSpade} from "./mocks/MockSpade.sol";
 import {DSTestPlus} from "./utils/DSTestPlus.sol";
 
-import {MockSpade} from "./mocks/MockSpade.sol";
-
 import {MockERC20} from "@solmate/test/utils/mocks/MockERC20.sol";
+import {FixedPointMathLib} from "@solmate/utils/FixedPointMathLib.sol";
 
 contract SpadeTest is DSTestPlus {
     MockSpade spade;
@@ -381,6 +381,80 @@ contract SpadeTest is DSTestPlus {
         // Double forgos are prevented with Reveals Mask
         vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidAction()"))));
         spade.forgo();
+    }
+
+    /// @notice Test Outliers Forgos
+    function testOutlierForgo() public {
+        startHoax(address(420), address(420), depositAmount);
+        bytes32 commitment = keccak256(abi.encodePacked(address(420), uint256(1), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment);
+        vm.warp(revealStart);
+        spade.reveal(uint256(1), blindingFactor);
+        vm.stopPrank();
+
+        startHoax(address(421), address(421), depositAmount);
+        bytes32 commitment2 = keccak256(abi.encodePacked(address(421), uint256(1), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment2);
+        vm.warp(revealStart);
+        spade.reveal(uint256(1), blindingFactor);
+        vm.stopPrank();
+
+        startHoax(address(422), address(422), depositAmount);
+        bytes32 commitment3 = keccak256(abi.encodePacked(address(422), uint256(1), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment3);
+        vm.warp(revealStart);
+        spade.reveal(uint256(1), blindingFactor);
+        vm.stopPrank();
+
+        startHoax(address(423), address(423), depositAmount);
+        bytes32 commitment4 = keccak256(abi.encodePacked(address(423), uint256(1), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment4);
+        vm.warp(revealStart);
+        spade.reveal(uint256(1), blindingFactor);
+        vm.stopPrank();
+
+        startHoax(address(69), address(69), depositAmount);
+        bytes32 commitment5 = keccak256(abi.encodePacked(address(69), uint256(100), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment5);
+        vm.warp(revealStart);
+        spade.reveal(uint256(100), blindingFactor);
+        vm.stopPrank();
+
+        // Check params
+        // Variance = 1568.16
+        // Standard Deviation = 39.6
+        // Mean = 20.8
+
+        assert(spade.rollingVariance() == 1568);
+        uint256 stdDev = FixedPointMathLib.sqrt(1568);
+        assert(stdDev == 39);
+        uint256 clearingPrice = spade.clearingPrice();
+        assert(clearingPrice == 20);
+        uint256 senderAppraisal = spade.reveals(address(69));
+        assert(senderAppraisal == 100);
+        uint256 diff = senderAppraisal < clearingPrice ? clearingPrice - senderAppraisal : senderAppraisal - clearingPrice;
+        uint256 zscore = diff / stdDev;
+        uint256 lossPenalty = (zscore * depositAmount) / 100;
+        assert(diff == 80);
+        assert(zscore == 2);
+
+        // Jump to mint
+        vm.warp(restrictedMintStart);
+
+        // 100 should lose the max penalty since they're an outlier
+        startHoax(address(69), address(69), 0);
+        spade.forgo();
+        uint256 remainingBalance = depositAmount - (spade.MAX_LOSS_PENALTY() * depositAmount) / 10_000;
+        assert(address(69).balance == remainingBalance);
+        assert(spade.reveals(address(69)) == 0);
+        assert(spade.balanceOf(address(69)) == 0);
+        assert(spade.totalSupply() == 0);
+        vm.stopPrank();
     }
 
     /// @notice Test Multiple Forgos
