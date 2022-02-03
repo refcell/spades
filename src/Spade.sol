@@ -140,6 +140,10 @@ abstract contract Spade {
     /// @dev Measured in bips
     uint256 public constant MAX_LOSS_PENALTY = 5_000;
 
+    /// @notice The maximum discount factor
+    /// @dev Measured in bips
+    uint256 public constant MAX_DISCOUNT_FACTOR = 2_000;
+
     ///////////////////////////////////////////////////////////////////////////////
     ///                                CUSTOM STORAGE                           ///
     ///////////////////////////////////////////////////////////////////////////////
@@ -274,6 +278,33 @@ abstract contract Spade {
     ///////////////////////////////////////////////////////////////////////////////
     ///                           RESTRICTED MINT LOGIC                         ///
     ///////////////////////////////////////////////////////////////////////////////
+
+    /// @notice Returns the mint price the user can mint at
+    function restrictedMintPrice() external view returns(uint256 mintPrice) {
+        // Sload the user's appraisal value
+        uint256 senderAppraisal = reveals[msg.sender];
+
+        // Result value
+        uint256 finalValue = clearingPrice;
+        if (finalValue < minPrice) finalValue = minPrice;
+
+        // Calculate Parameters
+        uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
+        uint256 clearingPrice_ = clearingPrice;
+        uint256 diff = senderAppraisal < clearingPrice_ ? clearingPrice_ - senderAppraisal : senderAppraisal - clearingPrice_;
+
+        // Prevent Outliers from Minting
+        uint256 zscore = 0;
+        if (stdDev != 0) {
+          zscore = diff / stdDev;
+        }
+
+        // Calculate the discount to clearingPrice using an inverse relation to revealed price
+        // Max discount factor = 20% or 2_000 bips
+        // Prevent a zscore of 0
+        zscore += 1;
+        mintPrice = clearingPrice_ - (clearingPrice_ * MAX_DISCOUNT_FACTOR) / (10_000 * zscore);
+    }
 
     /// @notice Enables Minting During the Restricted Minting Phase
     function restrictedMint() external payable {
@@ -412,7 +443,10 @@ abstract contract Spade {
       if (stdDev != 0) {
         zscore = diff / stdDev;
       }
-      mintable = zscore > 3 && (totalSupply + 1) <= MAX_TOKEN_SUPPLY;
+      mintable = block.timestamp >= restrictedMintStart
+                  && zscore < 3
+                  && ((totalSupply + 1) <= MAX_TOKEN_SUPPLY)
+                  && senderAppraisal != 0;
     }
 
     ///////////////////////////////////////////////////////////////////////////////

@@ -96,9 +96,9 @@ contract SpadeTest is DSTestPlus {
         spade.commit{value: depositAmount}(commitment);
     }
 
-    // ////////////////////////////////////////////////////
-    // ///                 REVEAL LOGIC                 ///
-    // ////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////
+    ///                 REVEAL LOGIC                 ///
+    ////////////////////////////////////////////////////
 
     /// @notice Test Reveals
     function testReveal(uint256 invalidConcealedBid) public {
@@ -186,38 +186,44 @@ contract SpadeTest is DSTestPlus {
         vm.stopPrank();
     }
 
-    // ////////////////////////////////////////////////////
-    // ///                  MINT LOGIC                  ///
-    // ////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////
+    ///                  RESTRICTED MINT LOGIC                  ///
+    ///////////////////////////////////////////////////////////////
 
-    // /// @notice Test Minting
-    // function testMinting() public {
-    //     // Commit+Reveal 1
-    //     bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
-    //     vm.warp(commitStart);
-    //     cloak.commit{value: depositAmount}(commitment);
-    //     vm.warp(revealStart);
-    //     cloak.reveal(uint256(10), blindingFactor);
+    /// @notice Test Restricted Minting
+    function testRestrictedMinting() public {
+        // Commit+Reveal 1
+        bytes32 commitment = keccak256(abi.encodePacked(address(this), uint256(10), blindingFactor));
+        vm.warp(commitStart);
+        spade.commit{value: depositAmount}(commitment);
+        vm.warp(revealStart);
+        spade.reveal(uint256(10), blindingFactor);
 
-    //     // Minting fails outside mint phase
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
-    //     cloak.mint();
+        // Minting fails outside restricted minting phase
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("WrongPhase()"))));
+        spade.restrictedMint();
+        assert(spade.canRestrictedMint() == false);
 
-    //     // Mint should fail without value
-    //     vm.warp(mintStart);
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("InsufficientValue()"))));
-    //     cloak.mint();
+        // Mint should fail without value
+        vm.warp(restrictedMintStart);
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("InsufficientValue()"))));
+        spade.restrictedMint();
 
-    //     // We should be able to mint
-    //     cloak.mint{value: 10}();
-    //     assert(cloak.reveals(address(this)) == 0);
-    //     assert(cloak.balanceOf(address(this)) == 1);
-    //     assert(cloak.totalSupply() == 1);
+        // The expected discount is 2_000 bips
+        assert(spade.restrictedMintPrice() == 8);
 
-    //     // Double mints are prevented with Reveals Mask
-    //     vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidAction()"))));
-    //     cloak.mint{value: 10}();
-    // }
+        // We should be able to mint
+        assert(spade.canRestrictedMint() == true);
+        spade.restrictedMint{value: 8}();
+        assert(spade.reveals(address(this)) == 0);
+        assert(spade.balanceOf(address(this)) == 1);
+        assert(spade.totalSupply() == 1);
+
+        // Double mints are prevented with Reveals Mask
+        assert(spade.canRestrictedMint() == false);
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("InvalidAction()"))));
+        spade.restrictedMint{value: 8}();
+    }
 
     // /// @notice Test Multiple Mints
     // function testMultipleMints() public {
