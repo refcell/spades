@@ -3,7 +3,7 @@
   "description": "Sealed Price Appraisals for Deterministic Emissions",
   "author": "Andreas Bigger <andreas@nascent.xyz>",
   "license": "AGPL-3.0-only",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "files": [
     "src/**/*.sol"
   ],

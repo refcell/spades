@@ -126,7 +126,7 @@ The mint price is fixed - artists and creators don't realize upside.
 
 Whitelists, gating methods, and gas wars prevent any semblance of a fair mint.
 
-## Extremely Technical Docs
+## Extremely Technical Documentation
 
 #### Phases
 
