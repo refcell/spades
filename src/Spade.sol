@@ -328,7 +328,8 @@ abstract contract Spade {
         uint256 senderAppraisal = reveals[msg.sender];
 
         // Result value
-        uint256 finalValue = clearingPrice;
+        uint256 clearingPrice_ = clearingPrice;
+        uint256 finalValue = clearingPrice_;
         if (finalValue < minPrice) finalValue = minPrice;
 
         // Use Reveals as a mask
@@ -336,7 +337,6 @@ abstract contract Spade {
 
         // Calculate Parameters
         uint256 stdDev = FixedPointMathLib.sqrt(rollingVariance);
-        uint256 clearingPrice_ = clearingPrice;
         uint256 diff = senderAppraisal < clearingPrice_ ? clearingPrice_ - senderAppraisal : senderAppraisal - clearingPrice_;
 
         // Prevent Outliers from Minting
@@ -354,7 +354,7 @@ abstract contract Spade {
         // Max discount factor = 20% or 2_000 bips
         // Prevent a zscore of 0
         zscore += 1;
-        uint256 discountedPrice = clearingPrice_ - (clearingPrice_ * 2_000) / (10_000 * zscore);
+        uint256 discountedPrice = finalValue - (finalValue * 2_000) / (10_000 * zscore);
 
         // Verify they sent at least enough to cover the mint cost
         if (depositToken == address(0) && msg.value < discountedPrice) revert InsufficientValue();
@@ -365,7 +365,7 @@ abstract contract Spade {
 
         // Deposit Penalty for underbidding
         uint256 depositReturn = depositAmount;
-        if (senderAppraisal < clearingPrice_ && zscore >= 2) {
+        if (senderAppraisal < finalValue || zscore >= 2) {
           depositReturn = depositReturn - (depositReturn * diff) / (stdDev * 100);
         }
 
@@ -471,8 +471,8 @@ abstract contract Spade {
 
         // Calculate the mint price
         uint256 memMintTime = mintTime;
-        if (memMintTime == 0) memMintTime = block.timestamp;
-        uint256 decay = ((block.timestamp - memMintTime) * priceDecayPerBlock);
+        if (memMintTime == 0) memMintTime = block.number;
+        uint256 decay = ((block.number - memMintTime) * priceDecayPerBlock);
         uint256 mintPrice = 0;
         if (decay <= clearingPrice) mintPrice = clearingPrice - decay;
         if (mintPrice < minPrice) mintPrice = minPrice;
@@ -493,7 +493,7 @@ abstract contract Spade {
           // }
         }
         clearingPrice = mintPrice + priceIncreasePerMint * amount;
-        mintTime = block.timestamp;
+        mintTime = block.number;
     }
 
     /// @notice Returns the price to mint for the LBP
@@ -501,7 +501,7 @@ abstract contract Spade {
     /// @return price to mint the tokens
     function mintPrice(uint256 amount) external view returns (uint256 price) {
       uint256 diff = 0;
-      if (mintTime != 0) diff = block.timestamp - mintTime;
+      if (mintTime != 0) diff = block.number - mintTime;
       uint256 decay = (diff * priceDecayPerBlock);
       if (decay <= clearingPrice) price = clearingPrice - decay;
       if (price < minPrice) price = minPrice;
