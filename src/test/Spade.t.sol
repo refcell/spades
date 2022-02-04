@@ -619,24 +619,35 @@ contract SpadeTest is DSTestPlus {
         // Jump one block ahead to realize price decrease
         vm.warp(publicMintStart + 1);
 
-        // Price should decrease
-        assert(spade.mintPrice(1) == 11);
-        spade.mint{value: 11}(1);
+        // Price doesn't decrease since we aren't in the next block
+        assert(spade.mintPrice(1) == 12);
+        spade.mint{value: 12}(1);
         assert(spade.balanceOf(address(receiver)) == 3);
         assert(spade.totalSupply() == 3);
-        assert(spade.clearingPrice() == 12);
-        assert(spade.mintPrice(1) == 12);
+        assert(spade.clearingPrice() == 13);
+        assert(spade.mintPrice(1) == 13);
 
-        // Warp way into the future
-        vm.warp(publicMintStart + 100);
+        // Roll into the future
+        vm.roll(publicMintStart + 1);
+
+        // Mint at a decreased price
+        assert(spade.mintPrice(1) == 13);
+        spade.mint{value: 13}(1);
+        assert(spade.balanceOf(address(receiver)) == 4);
+        assert(spade.totalSupply() == 4);
+        assert(spade.clearingPrice() == 14);
+        assert(spade.mintPrice(1) == 14);
+
+        // Roll into the future
+        vm.roll(publicMintStart + 5);
 
         // The price should now be the min price
         assert(spade.mintPrice(1) == minPrice);
         vm.expectRevert(abi.encodePacked(bytes4(keccak256("InsufficientValue()"))));
         spade.mint{value: 9}(1);
         spade.mint{value: 10}(1);
-        assert(spade.balanceOf(address(receiver)) == 4);
-        assert(spade.totalSupply() == 4);
+        assert(spade.balanceOf(address(receiver)) == 5);
+        assert(spade.totalSupply() == 5);
         assert(spade.clearingPrice() == 11);
         assert(spade.mintPrice(1) == 11);
 
