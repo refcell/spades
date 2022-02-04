@@ -1,4 +1,4 @@
-# spades • [![tests](https://github.com/abigger87/spades/actions/workflows/tests.yml/badge.svg)](https://github.com/abigger87/spades/actions/workflows/tests.yml) [![lints](https://github.com/abigger87/spades/actions/workflows/lints.yml/badge.svg)](https://github.com/abigger87/spades/actions/workflows/lints.yml) ![GitHub](https://img.shields.io/github/license/abigger87/spades) ![GitHub package.json version](https://img.shields.io/github/package-json/v/abigger87/spades)
+# spades • [![tests](https://github.com/abigger87/spades/actions/workflows/tests.yml/badge.svg)](https://github.com/abigger87/spades/actions/workflows/tests.yml) [![lints](https://github.com/abigger87/spades/actions/workflows/lints.yml/badge.svg)](https://github.com/abigger87/spades/actions/workflows/lints.yml) ![GitHub package.json version](https://img.shields.io/github/package-json/v/abigger87/spades)
 
 ♠️ **S**ealed **P**rice **A**ppraisals for **D**eterministic **E**missions.
 
