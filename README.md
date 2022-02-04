@@ -114,7 +114,7 @@ That is, on each new token minted, the price to mint another token increase by `
 ⚠️ NOTE ⚠️ no more than `MAX_MINT_PER_ACCOUNT` can be minted per account (except for the commitment participants who can mint `MAX_MINT_PER_ACCOUNT + 1`).
 
 
-## Motivation
+## Motivation ♠️
 
 Essentially the same as [cloaks](https://github.com/abigger87/cloaks).
 
@@ -126,7 +126,7 @@ The mint price is fixed - artists and creators don't realize upside.
 
 Whitelists, gating methods, and gas wars prevent any semblance of a fair mint.
 
-## Extremely Technical Documentation
+## Extremely Technical Documentation ♠️
 
 #### Phases
 
@@ -140,7 +140,7 @@ Whitelists, gating methods, and gas wars prevent any semblance of a fair mint.
 
 <img src='./assets/rolling_mean.png' width='500'>
 
-## Blueprint
+## Blueprint ♠️
 
 ```ml
 lib
@@ -154,7 +154,7 @@ src
 └─ Spade — "Spade ERC721 Contract"
 ```
 
-## Development
+## Development ♠️
 
 A [Spade](https://github.com/abigger87/spades) is an extensible ERC721 implementation with a commit-reveal scheme and lbp built _into_ the ERC721 contract itself.
 The only contract is located in [src/](./src/) called [Spade](./src/Spade.sol).
@@ -217,11 +217,11 @@ make test
 
 Using [foundry.toml](./foundry.toml), Foundry is easily configurable.
 
-## License
+## License ♠️
 
 [AGPL-3.0-only](https://github.com/abigger87/spades/blob/master/LICENSE)
 
-# Acknowledgements
+## Acknowledgements ♠️
 
 - [Glass.xyz's LBP ERC721](https://github.com/GlassProtocol/LBPERC721/blob/main/src/LBPERC721.sol)
 - [commit-reveal schemes](https://medium.com/swlh/exploring-commit-reveal-schemes-on-ethereum-c4ff5a777db8)
@@ -234,6 +234,6 @@ Using [foundry.toml](./foundry.toml), Foundry is easily configurable.
 - [forge-template](https://github.com/FrankieIsLost/forge-template) by [FrankieIsLost](https://github.com/FrankieIsLost).
 - [Georgios Konstantopoulos](https://github.com/gakonst) for [forge-template](https://github.com/gakonst/forge-template) resource.
 
-## Disclaimer
+## Disclaimer ♠️
 
 _These smart contracts are being provided as is. No guarantee, representation or warranty is being made, express or implied, as to the safety or correctness of the user interface or the smart contracts. They have not been audited and as such there can be no assurance they will work as intended, and users may experience delays, failures, errors, omissions, loss of transmitted information or loss of funds. The creators are not liable for any of the foregoing. Users should proceed with caution and use at their own risk._
