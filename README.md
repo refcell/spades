@@ -1,6 +1,6 @@
 # spades • [![tests](https://github.com/abigger87/spades/actions/workflows/tests.yml/badge.svg)](https://github.com/abigger87/spades/actions/workflows/tests.yml) [![lints](https://github.com/abigger87/spades/actions/workflows/lints.yml/badge.svg)](https://github.com/abigger87/spades/actions/workflows/lints.yml) ![GitHub](https://img.shields.io/github/license/abigger87/spades)  ![GitHub package.json version](https://img.shields.io/github/package-json/v/abigger87/spades)
 
-♠️ **S**ealed **P**rice **A**ppraisals for **D**eterministic **E**missions.
+**S**ealed **P**rice **A**ppraisals for **D**eterministic **E**missions.
 
 <!-- <h4 align="center">
 
@@ -35,7 +35,7 @@
 ```
 
 
-## Overview
+## Overview ♠️
 
 Current mints sacrifice both price-discovery and gas efficiency for ordering.
 
@@ -45,7 +45,7 @@ This leads to gas wars and bag shilling, often enabled by gated whitelists.
 
 TL;DR - [Spades](https://github.com/abigger87/spades) is an ERC721 with a builtin commit-reveal scheme to determine the initial clearing price of an LBP.
 
-## How it works
+## How it works ♠️
 
 Spades is an ERC721 Token with built-in minting broken down into four phases.
 
