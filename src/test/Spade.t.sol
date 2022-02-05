@@ -5,11 +5,14 @@ import {MockSpade} from "./mocks/MockSpade.sol";
 import {DSTestPlus} from "./utils/DSTestPlus.sol";
 import {ERC721User} from "./mocks/MockReceiver.sol";
 
-import {stdError} from "@std/stdlib.sol";
+import {stdError, stdStorage, StdStorage} from "@std/stdlib.sol";
 import {MockERC20} from "@solmate/test/utils/mocks/MockERC20.sol";
 import {FixedPointMathLib} from "@solmate/utils/FixedPointMathLib.sol";
 
 contract SpadeTest is DSTestPlus {
+    using stdStorage for StdStorage;
+    StdStorage stdstore;
+
     MockSpade spade;
 
     // Spade Arguments and Metadata
@@ -696,5 +699,38 @@ contract SpadeTest is DSTestPlus {
         assert(spade.canMint(1) == false);
 
         vm.stopPrank();
+    }
+
+    /// @notice Test max supply limit
+    function testMaxSupply() public {
+        uint256 maxSupply = spade.MAX_TOKEN_SUPPLY();
+        uint256 maxMint = spade.MAX_MINT_PER_ACCOUNT();
+
+        // Modify totalSupply to simulate (maxMint - 1) available
+        stdstore.target(address(spade)).sig("totalSupply()").checked_write(
+            maxSupply - (maxMint - 1)
+        );
+
+        // Time travel to public mint timestamp
+        vm.warp(spade.publicMintStart());
+        
+        // Initiate hoax to mint as 'receiver'
+        startHoax(address(receiver), address(receiver), type(uint256).max);
+
+        // Minting `maxMint` should fail as SoldOut
+        uint256 mintPrice = spade.mintPrice(maxMint);
+        assert(spade.canMint(maxMint) == false);
+        vm.expectRevert(abi.encodePacked(bytes4(keccak256("SoldOut()"))));
+        spade.mint{value: mintPrice}(maxMint);
+
+        // Minting `maxMint - 1` should succeed
+        mintPrice = spade.mintPrice(maxMint - 1);
+        assert(spade.canMint(maxMint - 1) == true);
+        spade.mint{value: mintPrice}(maxMint - 1);
+
+        vm.stopPrank();
+
+        // Should have minted exactly total supply
+        assert(spade.totalSupply() == maxSupply);
     }
 }
