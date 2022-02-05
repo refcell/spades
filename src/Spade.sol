@@ -466,6 +466,7 @@ abstract contract Spade {
     /// @param amount The number of ERC721 tokens to mint
     function mint(uint256 amount) external payable {
         if (block.timestamp < publicMintStart) revert WrongPhase();
+        if (amount < 1) revert InvalidAction();
         if (totalSupply + amount > MAX_TOKEN_SUPPLY) revert SoldOut();
         if (minted[msg.sender] + amount > MAX_MINT_PER_ACCOUNT) revert MaxTokensMinted();
 
